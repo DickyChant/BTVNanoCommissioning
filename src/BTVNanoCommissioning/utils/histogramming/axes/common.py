@@ -8,6 +8,12 @@ axes = {
     "ljpt": hist.axis.Regular(200, 0, 2000, name="pt", label=" $p_{T}$ [GeV]"),
     "softlpt": hist.axis.Regular(25, 0, 25, name="pt", label=" $p_{T}$ [GeV]"),
     "mass": hist.axis.Regular(50, 0, 300, name="mass", label=" mass [GeV]"),
+    # hadronic W mass (semileptonic ttbar) and pileup-subtracted track multiplicity
+    "mW": hist.axis.Regular(50, 40, 140, name="mass", label="$m_{jj}$ [GeV]"),
+    "ntrack": hist.axis.Regular(
+        60, -10, 110, name="ntrack", label="$n_{trk}^{PV}-n_{trk}^{t\\bar{t}}$"
+    ),
+    "ntrk": hist.axis.Regular(60, 0, 120, name="ntrk", label="$n_{trk}$"),
     "bdt": hist.axis.Regular(50, 0, 1, name="bdt", label=" BDT discriminant"),
     "eta": hist.axis.Regular(25, -2.5, 2.5, name="eta", label=" $\eta$"),
     "phi": hist.axis.Regular(30, -3, 3, name="phi", label="$\phi$"),

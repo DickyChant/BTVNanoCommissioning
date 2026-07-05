@@ -24,6 +24,7 @@ from BTVNanoCommissioning.utils.selection import (
     HLT_helper,
     jet_id,
     btag_mu_idiso,
+    btag_wp,
     MET_filters,
 )
 
@@ -279,6 +280,40 @@ class NanoProcessor(processor.ProcessorABC):
                 )
         else:
             pruned_ev[f"dr_mujet0"] = pruned_ev.SelMuon.delta_r(pruned_ev.SelJet)
+
+        ###############################################################
+        # Hadronic W mass vs pileup-subtracted track multiplicity     #
+        # (semileptonic ttbar; cf. CMS UE-in-ttbar, arXiv:1807.02810) #
+        ###############################################################
+        if self.ttaddsel != "c_tt_semilep":
+            sel4 = pruned_ev.SelJet  # leading-4 selected jets (the ttbar jets)
+            # b tag (DeepJet medium): the hadronic W is the pair of non-b light jets
+            try:
+                bmask = btag_wp(sel4, self._year, self._campaign, "DeepFlav", "b", "M")
+            except Exception:
+                # fallback if BTV WP metadata is unavailable for this campaign
+                bmask = sel4.btagDeepFlavB > 0.3
+            bmask = ak.fill_none(bmask, False)
+            light = sel4[~bmask]
+            # all non-b light-jet pairs; pick the one closest to m_W = 80.4 GeV
+            pairs = ak.combinations(light, 2, fields=["j1", "j2"])
+            pair_mass = (pairs.j1 + pairs.j2).mass
+            has_pair = ak.num(pair_mass, axis=1) > 0
+            best = ak.argmin(np.abs(pair_mass - 80.4), axis=1, keepdims=True)
+            hadW_mass = ak.firsts(pair_mass[best])
+            pruned_ev["hadW_valid"] = ak.fill_none(has_pair, False)
+            pruned_ev["hadW_mass"] = ak.fill_none(hadW_mass, -1.0)
+
+            # Track observable: PV tracks (from PV_ndof) minus the charged
+            # constituents of the ttbar jets minus the selected muon (1 track).
+            # ntrk_PV ~ (PV_ndof + 3)/2; charged constituents per jet ~
+            # nConstituents - neMultiplicity (central NanoAODv15 has no PFCands).
+            ntrk_pv = (pruned_ev.PV.ndof + 3.0) / 2.0
+            charged_const = sel4.nConstituents - sel4.neMultiplicity
+            njet_trk = ak.sum(charged_const, axis=1)
+            pruned_ev["ntrk_pv"] = ntrk_pv
+            pruned_ev["njet_trk"] = njet_trk
+            pruned_ev["n_track"] = ntrk_pv - njet_trk - 1.0
 
         ####################
         #     Output       #

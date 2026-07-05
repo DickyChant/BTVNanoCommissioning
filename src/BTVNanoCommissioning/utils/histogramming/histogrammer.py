@@ -263,6 +263,34 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                 output["njet"].fill(syst, pruned_ev.njet, weight=weight)
             elif "npv" == histname:
                 output["npv"].fill(syst, pruned_ev.PV.npvsGood, weight=weight)
+            # Hadronic W mass & pileup-subtracted track multiplicity (ttsemilep)
+            elif "hadW_mass" == histname and "hadW_mass" in pruned_ev.fields:
+                valid = ak.to_numpy(pruned_ev.hadW_valid)
+                output["hadW_mass"].fill(
+                    syst[valid],
+                    ak.to_numpy(pruned_ev.hadW_mass)[valid],
+                    weight=weight[valid],
+                )
+            elif "n_track" == histname and "n_track" in pruned_ev.fields:
+                output["n_track"].fill(
+                    syst, ak.to_numpy(pruned_ev.n_track), weight=weight
+                )
+            elif "ntrk_pv" == histname and "ntrk_pv" in pruned_ev.fields:
+                output["ntrk_pv"].fill(
+                    syst, ak.to_numpy(pruned_ev.ntrk_pv), weight=weight
+                )
+            elif "njet_trk" == histname and "njet_trk" in pruned_ev.fields:
+                output["njet_trk"].fill(
+                    syst, ak.to_numpy(pruned_ev.njet_trk), weight=weight
+                )
+            elif "hadW_mass_vs_ntrack" == histname and "hadW_mass" in pruned_ev.fields:
+                valid = ak.to_numpy(pruned_ev.hadW_valid)
+                output["hadW_mass_vs_ntrack"].fill(
+                    syst[valid],
+                    ak.to_numpy(pruned_ev.n_track)[valid],
+                    ak.to_numpy(pruned_ev.hadW_mass)[valid],
+                    weight=weight[valid],
+                )
             # Jet kinematics & deltaR between jet and lepton
             elif (
                 "jet" in histname and "posl" not in histname and "negl" not in histname
