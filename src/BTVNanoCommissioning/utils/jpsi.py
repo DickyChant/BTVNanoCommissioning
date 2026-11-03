@@ -18,6 +18,10 @@ MASS_LO, MASS_HI = 2.0, 4.5
 MREG = ((2.60, 2.90), (2.95, 3.25), (3.30, 3.60))
 DZ_MAX = 0.5  # |dz(mu1) - dz(mu2)| [cm]: both muons from one vertex (no dimuon vertex fit in NanoAOD)
 DR_JET = 0.4  # the J/psi is "in" a jet within this Delta R of the jet axis
+# lifetime regions (dimuon_vertex): on inclusive 2024 J/psi the prompt peak of l_xy has a core of about 20 um, so
+# |l_xy| < 0.06 mm is prompt-like and l_xy > 0.1 mm is dominated by b-hadron decays; |z0| > 0.1 cm points to another vertex
+LXY_PROMPT, LXY_NONPROMPT = 0.06, 0.10  # mm
+Z0_PV = 0.1  # cm
 
 
 def jpsi_muon_mask(events, exclude):
@@ -50,6 +54,7 @@ def find_jpsi(events, cand):
     rap = 0.5 * np.log((energy + pz) / np.maximum(energy - pz, 1e-9))
     sip = np.maximum(ak.firsts(m1.sip3d[best]), ak.firsts(m2.sip3d[best]))
     nmed = ak.values_astype(m1.mediumId, np.int64) + ak.values_astype(m2.mediumId, np.int64)
+    vtx = dimuon_vertex(ak.firsts(m1[best]), ak.firsts(m2[best]), jp, ak.to_numpy(valid))
     info = {
         "valid": valid,
         "p4": jp,
@@ -61,8 +66,66 @@ def find_jpsi(events, cand):
         "nmed": ak.fill_none(ak.firsts(nmed[best]), 0),
         "i1": i1,
         "i2": i2,
+        **vtx,
     }
     return info, ak.fill_none(in_pair, False)
+
+
+def _np(x, fill):
+    return ak.to_numpy(ak.fill_none(x, fill)).astype(np.float64)
+
+
+def dimuon_vertex(b1, b2, jp, valid):
+    """Two-muon vertex and the pseudo-proper decay length (central NanoAOD has no dimuon vertex fit).
+
+    Each muon track is a straight line near the primary vertex (the curvature is negligible over a few mm): its
+    transverse point of closest approach to the PV is (-dxy sin(phi), dxy cos(phi), dz) relative to the PV, its
+    direction u from (eta, phi). The vertex V minimises the chi2 of the distances to the two lines along the two
+    directions perpendicular to each track, n_T (transverse, error dxyErr) and n_L = u x n_T (error dzErr sin(theta)):
+    a linear fit with 4 measurements and 3 unknowns (1 degree of freedom).
+      lxy = m(J/psi) (L_xy . p_T) / p_T^2, L = V - PV          (pseudo-proper decay length, mm, PDG mass)
+      z0  = z of the J/psi line at its transverse closest approach to the PV (cm): ~0 for a J/psi from the PV
+            (prompt or from a b hadron), the distance to another vertex for pileup."""
+    n = len(valid)
+    A, b = np.zeros((n, 3, 3)), np.zeros((n, 3))
+    meas = []
+    for m in (b1, b2):
+        phi, eta = _np(m.phi, 0.0), _np(m.eta, 0.0)
+        cl, sl = 1.0 / np.cosh(eta), np.tanh(eta)
+        n_t = np.stack([-np.sin(phi), np.cos(phi), np.zeros(n)], axis=1)
+        n_l = np.stack([-sl * np.cos(phi), -sl * np.sin(phi), cl], axis=1)
+        s_t = np.maximum(_np(m.dxyErr, 1.0), 1e-4)
+        s_l = np.maximum(_np(m.dzErr, 1.0), 1e-4) * cl
+        # offsets of the track's closest-approach point along n_T and n_L: dxy and dz sin(theta)
+        meas += [(n_t, _np(m.dxy, 0.0), s_t), (n_l, _np(m.dz, 0.0) * cl, s_l)]
+    for nv, d, sig in meas:
+        w = 1.0 / sig**2
+        A += w[:, None, None] * nv[:, :, None] * nv[:, None, :]
+        b += (w * d)[:, None] * nv
+    det = np.linalg.det(A)
+    ok = valid & np.isfinite(det) & (det > 0)
+    A[~ok], b[~ok] = np.eye(3), 0.0
+    C = np.linalg.inv(A)
+    V = np.einsum("nij,nj->ni", C, b)
+    chi2 = sum(((np.einsum("ni,ni->n", nv, V) - d) / sig) ** 2 for nv, d, sig in meas)
+    px, py, pz = _np(jp.px, 0.0), _np(jp.py, 0.0), _np(jp.pz, 0.0)
+    pt2 = np.maximum(px**2 + py**2, 1e-6)
+    g = np.stack([px, py, np.zeros(n)], axis=1) * (MJPSI / pt2)[:, None]
+    lxy = np.einsum("ni,ni->n", g, V)
+    lerr = np.sqrt(np.maximum(np.einsum("ni,nij,nj->n", g, C, g), 0.0))
+    z0 = V[:, 2] - (V[:, 0] * px + V[:, 1] * py) / pt2 * pz
+    ok &= np.isfinite(lxy) & np.isfinite(z0) & (lerr < 1.0)
+    bad = lambda x: np.where(ok, x, -99.0)  # noqa: E731
+    return {"lxy": bad(10.0 * lxy), "lxyerr": bad(10.0 * lerr), "z0": bad(z0), "vchi2": bad(chi2), "vok": ok}
+
+
+def life_region(info):
+    """0 prompt (|l_xy| < 0.06 mm), 1 non-prompt (l_xy > 0.1 mm), 2 in between or negative tail, each with
+    |z0| < 0.1 cm (from the primary vertex); 3 pileup-like (|z0| >= 0.1 cm); 4 no vertex."""
+    lxy, z0, ok = np.asarray(info["lxy"]), np.abs(np.asarray(info["z0"])), np.asarray(info["vok"])
+    reg = np.where(lxy > LXY_NONPROMPT, 1, np.where(np.abs(lxy) < LXY_PROMPT, 0, 2))
+    reg = np.where(z0 >= Z0_PV, 3, reg)
+    return np.where(ok, reg, 4).astype(np.int64)
 
 
 def mass_region(mass):
@@ -159,6 +222,9 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
     for k in ("os", "mass", "pt", "absy", "sip", "nmed"):
         pruned_ev[f"jpsi_{k}"] = info[k][sel]
     pruned_ev["jpsi_mreg"] = mass_region(info["mass"][sel])
+    for k in ("lxy", "lxyerr", "z0", "vchi2"):
+        pruned_ev[f"jpsi_{k}"] = np.asarray(info[k])[sel]
+    pruned_ev["jpsi_life"] = life_region(info)[sel]
     pruned_ev["jpsi_truth"] = info["truth"][sel]
     for k in ("cat", "drj", "z"):
         pruned_ev[f"jpsi_{k}"] = assoc[k]

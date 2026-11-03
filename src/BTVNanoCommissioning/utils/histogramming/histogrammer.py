@@ -87,6 +87,7 @@ NOMINAL_ONLY = (
     "jpsi_tt_mjj",
     "jpsi_tt_mjjb",
     "jpsi_tt_mlb",
+    "jpsi_lxy",
 )
 
 
@@ -468,9 +469,11 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                 jf = lambda k: ak.to_numpy(pruned_ev[f"jpsi_{k}"])[v]  # noqa: E731
                 js, jw = syst[v], weight[v]
                 if histname == "jpsi_mass":
-                    h.fill(js, jf("os"), jf("nmed"), jf("cat"), jf("truth"), jf("nb"), jf("mass"), weight=jw)
+                    h.fill(js, jf("os"), jf("nmed"), jf("cat"), jf("truth"), jf("nb"), jf("life"), jf("mass"), weight=jw)
+                elif histname == "jpsi_lxy":
+                    h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("nb"), np.abs(jf("z0")), jf("lxy"), weight=jw)
                 elif histname == "jpsi_pt":
-                    h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("pt"), jf("absy"), weight=jw)
+                    h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("life"), jf("pt"), jf("absy"), weight=jw)
                 elif histname == "jpsi_sip":
                     h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("sip"), weight=jw)
                 elif histname == "jpsi_drj":
@@ -487,7 +490,9 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                         continue
                     x = jf(key)
                     ok = x > 0
-                    h.fill(js[ok], jf("mreg")[ok], jf("os")[ok], jf("cat")[ok], jf("nb")[ok], x[ok], weight=jw[ok])
+                    h.fill(
+                        js[ok], jf("mreg")[ok], jf("os")[ok], jf("cat")[ok], jf("nb")[ok], jf("life")[ok], x[ok], weight=jw[ok]
+                    )
                 elif histname == "jpsi_tt_mlb":
                     for lep, pdg in (("mu", 13), ("e", 11)):
                         if f"jpsi_tt_mlb_{lep}" not in pruned_ev.fields:
@@ -495,7 +500,8 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                         x = jf(f"tt_mlb_{lep}")
                         ok = x > 0
                         h.fill(
-                            js[ok], pdg, jf("mreg")[ok], jf("os")[ok], jf("cat")[ok], jf("nb")[ok], x[ok], weight=jw[ok]
+                            js[ok], pdg, jf("mreg")[ok], jf("os")[ok], jf("cat")[ok], jf("nb")[ok], jf("life")[ok], x[ok],
+                            weight=jw[ok],
                         )
                 elif histname == "jpsi_mlj":
                     for lep, pdg in (("mu", 13), ("e", 11)):
