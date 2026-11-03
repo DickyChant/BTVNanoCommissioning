@@ -82,12 +82,15 @@ def nominal(h, flow_last=False):
 
 
 acc, sumw, edges, shapes, nfiles = {}, {}, {}, {}, 0
+files_per_dir = {}
 for f in sorted(sum((glob.glob(f"{o}/*/*.coffea") for o in OUTDIRS), [])):
     try:
         o = load(f)
     except Exception:  # noqa: BLE001
         continue
     nfiles += 1
+    od = os.path.dirname(os.path.dirname(f))
+    files_per_dir[od] = files_per_dir.get(od, 0) + 1
     for ds, d in o.items():
         sumw[ds] = sumw.get(ds, 0.0) + float(next(iter(d.values()))["sumw"])
         for chk, hd in d.items():
@@ -98,15 +101,24 @@ for f in sorted(sum((glob.glob(f"{o}/*/*.coffea") for o in OUTDIRS), [])):
                     continue
                 names = [ax.name for ax in h.axes]
                 il = names.index("life") - 1 if "life" in names else None  # lifetime-region axis (ttJ outputs)
+                it = names.index("sltrig") - 1 if "sltrig" in names else None  # single-lepton trigger axis (BPHNano outputs)
                 shp = tuple(len(ax) for ax in h.axes[1:])
-                shapes.setdefault((ch, hn), shp if il is None else shp[:il] + shp[il + 1:])  # also from unfilled histograms
+                drop = lambda t, *ks: tuple(x for k, x in enumerate(t) if k not in ks)  # noqa: E731
+                shapes.setdefault((ch, hn), drop(shp, il, it))  # also from unfilled histograms
                 if il is not None:
-                    shapes.setdefault((ch, hn + "@life"), shp)
+                    shapes.setdefault((ch, hn + "@life"), drop(shp, it))
+                if it is not None:
+                    shapes.setdefault((ch, hn + "@sltrig"), drop(shp, il))
                 if hn == "jpsi_sip":  # with the under- and overflow of the SIP axis
                     shapes.setdefault((ch, "jpsi_sip_flow"), shp[:-1] + (shp[-1] + 2,))
                 if "nominal" not in list(h.axes["syst"]):
                     continue
                 v, w2 = nominal(h)
+                if it is not None:
+                    a = acc.setdefault(ds, {}).setdefault((ch, hn + "@sltrig"), [0.0, 0.0])
+                    a[0], a[1] = a[0] + (v.sum(axis=il) if il is not None else v), a[1] + (w2.sum(axis=il) if il is not None else w2)
+                    v, w2 = v.sum(axis=it), w2.sum(axis=it)
+                    il = il - 1 if il is not None and il > it else il
                 if il is not None:
                     a = acc.setdefault(ds, {}).setdefault((ch, hn + "@life"), [0.0, 0.0])
                     a[0], a[1] = a[0] + v, a[1] + w2
@@ -118,7 +130,7 @@ for f in sorted(sum((glob.glob(f"{o}/*/*.coffea") for o in OUTDIRS), [])):
                     a = acc[ds].setdefault((ch, "jpsi_sip_flow"), [0.0, 0.0])
                     a[0], a[1] = a[0] + v, a[1] + w2
                 edges.setdefault((ch, hn), [list(ax) if isinstance(ax, (Hist.axis.IntCategory, Hist.axis.StrCategory)) else list(map(float, ax.edges))
-                                            for ax in h.axes[1:] if ax.name != "life"])
+                                            for ax in h.axes[1:] if ax.name not in ("life", "sltrig")])
 
 
 def total(key, which):
@@ -184,7 +196,7 @@ def mean_profile(v, w2):
     return {"slope": 100 * s, "err": 100 * e, "icpt": c, "means": ys, "errs": es}
 
 
-R = {"files": nfiles, "datasets": sorted(acc), "channels": {}}
+R = {"files": nfiles, "files_per_dir": files_per_dir, "datasets": sorted(acc), "channels": {}}
 for ch in ("mujets", "ejets", "emu"):
     if not any(k[0] == ch for k in shapes):
         continue
@@ -348,6 +360,14 @@ for ch in ("mujets", "ejets", "emu"):
                     L[f"spectrum_{ln}_{cn}_err"] = list(map(float, np.sqrt(np.maximum(e2, 0))))
             row = v[1, :, 1:, li].sum(axis=(0, 1))
             L[f"ss_{ln}_all"] = float(row[SIG].sum() - 0.5 * row[SB].sum())
+        # BPHNano: J/psi-triggered events in which the channel's single-lepton trigger did not / did fire
+        if (ch, "jpsi_mass@sltrig") in shapes:
+            v2, e2_ = total((ch, "jpsi_mass@sltrig"), "data")  # (osss, nmed, cat, truth, nbj, sltrig, mass)
+            v2, e2_ = v2.sum(axis=(1, 3)), e2_.sum(axis=(1, 3))
+            for itg, tn in ((0, "no_sltrig"), (1, "sltrig")):
+                for cn, cs in CATS.items():
+                    row, e2 = v2[0, cs, 1:, itg].sum(axis=(0, 1)), e2_[0, cs, 1:, itg].sum(axis=(0, 1))
+                    L[f"yield_{tn}_{cn}"] = {"n": float(row[SIG].sum() - 0.5 * row[SB].sum()), "err": float(np.sqrt(e2[SIG].sum() + 0.25 * e2[SB].sum()))}
         # l_xy, sideband-subtracted: jpsi_lxy (mreg, osss, cat, truth, nbj, z0, lxy); z0 bins 0-2: |z0| < 0.1 cm
         v, w2 = total((ch, "jpsi_lxy"), "data")
         s, s2 = sbsub(v, w2, 0)

@@ -8,9 +8,10 @@
 #   TTJ_OUT      output directory: <TTJ_OUT>/<job name>/<job name>.coffea
 #   TTJ_CONDA    conda environment with coffea 0.7 (activated with its etc/profile.d/conda.sh)
 #   X509_USER_PROXY  grid proxy readable from the batch node (for xrootd)
-NAME=$1; SYST=${2:-False}
+#   TTJ_WF       workflow (default ttJ; ttJ_bph for BPHNano of the low-mass double-muon parking)
+NAME=$1; SYST=${2:-False}; WF=${TTJ_WF:-ttJ}
 SUB=$TTJ_SUBJSON/${NAME}.json
-echo "[job] host=$(hostname) name=$NAME isSyst=$SYST start=$(date)"
+echo "[job] host=$(hostname) wf=$WF name=$NAME isSyst=$SYST start=$(date)"
 # spread the start-up reads of a shared conda environment (hundreds of jobs start at once)
 sleep $((RANDOM % 600))
 source "$(dirname "$(dirname "$TTJ_CONDA")")/etc/profile.d/conda.sh" && conda activate "$TTJ_CONDA"
@@ -29,7 +30,7 @@ sed 's#root://xrootd-cms.infn.it/#root://cms-xrd-global.cern.ch/#g' "$SUB" > "$T
 cd "$TTJ_CODE"
 # up to four attempts: the redirector of the sub-json first, then the global one
 for J in "$SUB" "$TMPJ" "$SUB" "$TMPJ"; do
-  python runner.py --wf ttJ --json "$J" --campaign Summer24 --year 2024 --executor iterative \
+  python runner.py --wf $WF --json "$J" --campaign Summer24 --year 2024 --executor iterative \
     --chunk 40000 --skipbadfiles --isSyst $SYST --ttbar-reweights full -o ${NAME}.coffea --outputdir "$TTJ_OUT" 2> >(grep -v -i 'warn' >&2)
   rc=$?; echo "[job] runner exit=$rc json=$J $(date)"
   [ $rc -eq 0 ] && [ -f "$TTJ_OUT/${NAME}/${NAME}.coffea" ] && break
