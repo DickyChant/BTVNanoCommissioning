@@ -26,6 +26,7 @@ from BTVNanoCommissioning.utils.selection import (
     jet_id,
     btag_mu_idiso,
     btag_wp,
+    ele_mvatightid,
     MET_filters,
 )
 
@@ -54,7 +55,11 @@ class NanoProcessor(processor.ProcessorABC):
         ### Added selection for ttbar semileptonic
         self.ttaddsel = selectionModifier
         ## Load corrections
-        self.SF_map = load_SF(self._year, self._campaign)
+        self.SF_map = (
+            load_SF(self._year, self._campaign, "tt_semilep_e")
+            if selectionModifier == "tt_semilep_e"
+            else load_SF(self._year, self._campaign)
+        )
 
     @property
     def accumulator(self):
@@ -92,6 +97,7 @@ class NanoProcessor(processor.ProcessorABC):
                     else ["common", "fourvec", "ttsemilep"]
                 ),
                 c_ttsemilep=self.ttaddsel == "c_tt_semilep",
+                elec=self.ttaddsel == "tt_semilep_e",
             )
 
         if shift_name is None:
@@ -128,18 +134,34 @@ class NanoProcessor(processor.ProcessorABC):
             output = dump_lumi(events[req_lumi], output)
 
         ## HLT
-        triggers = ["IsoMu24"]
+        # electron mirror of the hadronic-W study: single-electron trigger (EGamma PD), one tight electron
+        elec = self.ttaddsel == "tt_semilep_e"
+        # (Ele30_WPTight_Gsf: the lowest unprescaled 2024 path, the one with EGM trigger SFs)
+        triggers = ["Ele30_WPTight_Gsf"] if elec else ["IsoMu24"]
         req_trig = HLT_helper(events, triggers)
 
         ## Muon cuts
         # muon twiki: https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonIdRun2
-        event_muon = events.Muon[
-            (events.Muon.pt > 30) & btag_mu_idiso(events, self._campaign)
-        ]
+        if elec:
+            # MVA-isolation WP80 (the EGM recommendation with 2024 SFs), pT 5 GeV above the trigger threshold
+            event_muon = events.Electron[
+                (events.Electron.pt > 35) & ele_mvatightid(events, self._campaign)
+            ]
+        else:
+            event_muon = events.Muon[
+                (events.Muon.pt > 30) & btag_mu_idiso(events, self._campaign)
+            ]
         # event_muon = ak.pad_none(events.Muon, 1, axis=1)
         req_muon = ak.count(event_muon.pt, axis=1) == 1
 
         ## Jet cuts
+        # the electron mirror keeps the muon-channel jet definition (away from all muons) and also
+        # removes jets within 0.4 of the selected electron
+        clean_e = (
+            ak.all(events.Jet.metric_table(event_muon) > 0.4, axis=2, mask_identity=True)
+            if elec
+            else True
+        )
         event_jet = events.Jet[
             ak.fill_none(
                 jet_id(events, self._campaign)
@@ -149,7 +171,8 @@ class NanoProcessor(processor.ProcessorABC):
                         axis=2,
                         mask_identity=True,
                     )
-                ),
+                )
+                & clean_e,
                 False,
                 axis=-1,
             )
@@ -274,17 +297,19 @@ class NanoProcessor(processor.ProcessorABC):
             if self.ttaddsel != "c_tt_semilep"
             else c_jets[event_level][:, 0]
         )
-        pruned_ev["SelMuon"] = event_muon[event_level][:, 0]
+        # the selected lepton (SelElectron in the electron mirror: electron SFs, no muon SFs)
+        pruned_ev["SelElectron" if elec else "SelMuon"] = event_muon[event_level][:, 0]
+        sel_lep = pruned_ev.SelElectron if elec else pruned_ev.SelMuon
         pruned_ev["njet"] = ak.count(event_jet[event_level].pt, axis=1)
         if "PFCands" in events.fields:
             pruned_ev.PFCands = PFCand_link(events, event_level, jetindx)
         if self.ttaddsel != "c_tt_semilep":
             for i in range(4):
-                pruned_ev[f"dr_mujet{i}"] = pruned_ev.SelMuon.delta_r(
+                pruned_ev[f"dr_mujet{i}"] = sel_lep.delta_r(
                     pruned_ev.SelJet[:, i]
                 )
         else:
-            pruned_ev[f"dr_mujet0"] = pruned_ev.SelMuon.delta_r(pruned_ev.SelJet)
+            pruned_ev[f"dr_mujet0"] = sel_lep.delta_r(pruned_ev.SelJet)
 
         ###############################################################
         # Hadronic W mass vs pileup-subtracted track multiplicity     #
@@ -324,7 +349,7 @@ class NanoProcessor(processor.ProcessorABC):
             # hadronic pairing: muon charge (W+jets is charge-asymmetric), mT(mu,
             # MET), MET, and the smaller m(mu, j) of the two jets left after the
             # W pair (the leptonic b in ttbar: endpoint ~153 GeV).
-            mu = pruned_ev.SelMuon
+            mu = sel_lep  # the muon, or the electron in the electron mirror
             met = pruned_ev.MET
             pruned_ev["lep_charge"] = ak.values_astype(mu.charge, np.int64)
             pruned_ev["lep_met"] = met.pt
@@ -384,6 +409,13 @@ class NanoProcessor(processor.ProcessorABC):
             pruned_ev["ntrk_pv"] = ntrk_pv
             pruned_ev["njet_trk"] = njet_trk
             pruned_ev["n_track"] = ntrk_pv - njet_trk - 1.0
+
+            # leptonic-side diagnostics (leptonic b of the m(jjb) choice), against n_track
+            pruned_ev["dg_lpt"] = mu.pt
+            pruned_ev["dg_dr"] = ak.fill_none(mu.delta_r(blep_mt), -1.0)
+            pruned_ev["dg_bpt"] = ak.fill_none(blep_mt.pt, -1.0)
+            pruned_ev["dg_ntpv"] = ntrk_pv
+            pruned_ev["dg_ntj"] = njet_trk
 
         ####################
         #     Output       #

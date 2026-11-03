@@ -21,7 +21,7 @@ PT_EDGES = [20, 30, 50, 70, 100, 140, 200, 300, 1000]
 ETA_EDGES = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5]
 GROUPS = (
     ("tt", ("TT",)),
-    ("wjets", ("WtoMuNu",)),
+    ("wjets", ("WtoMuNu", "WtoENu")),
     ("dy", ("DYto",)),
     ("st", ("TbarW", "TW")),
     ("vv", ("WW", "WZ", "ZZ")),

@@ -60,7 +60,7 @@ class NanoProcessor(processor.ProcessorABC):
         self.SF_map = load_SF(
             self._year,
             self._campaign,
-            "tt_dilep" if self.selMod == "tt_dilep_hadw" else self.selMod,
+            "tt_dilep" if self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e") else self.selMod,
         )
 
     @property
@@ -92,7 +92,8 @@ class NanoProcessor(processor.ProcessorABC):
                     if os.environ.get("HADW_STUDY_HISTS")  # study histograms only (systematics runs)
                     else ["common", "fourvec", "ttdilep"]
                 ),
-                hadw=self.selMod == "tt_dilep_hadw",
+                hadw=self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e"),
+                elec=self.selMod == "tt_dilep_hadw_e",
             )
 
         if shift_name is None:
@@ -135,11 +136,18 @@ class NanoProcessor(processor.ProcessorABC):
             "Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
             "Mu8_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
         ]
-        hadw = self.selMod == "tt_dilep_hadw"
+        hadw = self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e")
+        # electron mirror: the same e mu selection triggered by the single electron (EGamma PD)
+        elec = self.selMod == "tt_dilep_hadw_e"
         if hadw:
             # run on the Muon primary dataset like the semileptonic study
-            triggers = ["IsoMu24"]
+            triggers = ["Ele30_WPTight_Gsf"] if elec else ["IsoMu24"]
         req_trig = HLT_helper(events, triggers)
+        mutrig = (
+            ak.values_astype(events.HLT.IsoMu24, np.int64)
+            if elec and hasattr(events.HLT, "IsoMu24")
+            else None
+        )
 
         ## Muon cuts
         # muon twiki: https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonIdRun2
@@ -160,7 +168,8 @@ class NanoProcessor(processor.ProcessorABC):
         # electron twiki: https://twiki.cern.ch/twiki/bin/viewauth/CMS/CutBasedElectronIdentificationRun2
         if self._campaign in ["Summer24", "Winter25", "Prompt25"]:  # NanoAODv15
             events.Electron = events.Electron[
-                (events.Electron.pt > 25) & ele_promptmvaid(events, self._campaign)
+                (events.Electron.pt > (35 if elec else 25))  # 5 GeV above the Ele30 threshold
+                & ele_promptmvaid(events, self._campaign)
             ]
         else:
             events.Electron = events.Electron[
@@ -276,6 +285,17 @@ class NanoProcessor(processor.ProcessorABC):
                 pruned_ev[f"dil_truth_{tag}"] = ak.values_astype(t, np.int64)
             chg = lambda j: j.nConstituents - j.neMultiplicity  # noqa: E731
             pruned_ev["dil_ntrack"] = (pruned_ev.PV.ndof + 3.0) / 2.0 - chg(j1) - chg(j2) - 2.0
+            if elec:
+                pruned_ev["dil_mutrig"] = mutrig[event_level]
+                # diagnostics per lepton with the minimax pairing: lepton pT, Delta R(l, b), b pT;
+                # and the two n_track terms
+                ua = use_a["mm"]
+                for lep, lv, ja, jb in (("mu", mu, j1, j2), ("e", el, j2, j1)):  # pairing A: (mu, j1)(e, j2)
+                    pruned_ev[f"dgd_lpt_{lep}"] = lv.pt
+                    pruned_ev[f"dgd_dr_{lep}"] = ak.where(ua, lv.delta_r(ja), lv.delta_r(jb))
+                    pruned_ev[f"dgd_bpt_{lep}"] = ak.where(ua, ja.pt, jb.pt)
+                pruned_ev["dgd_ntpv"] = (pruned_ev.PV.ndof + 3.0) / 2.0
+                pruned_ev["dgd_ntj"] = chg(j1) + chg(j2)
 
         # Find the PFCands associate with selected jets. Search from jetindex->JetPFCands->PFCand
         if "PFCands" in events.fields:

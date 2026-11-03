@@ -344,6 +344,14 @@ correction_config = {
             },
             # "BTV": {"ctag": "ctagging.json.gz"},
         },
+        # electron mirror of the hadronic-W study (e + jets): MVA-iso WP80 electron; the 2024 EGM
+        # file keys the year as "2024Prompt" (the default block's "2024" does not evaluate)
+        "tt_semilep_e": {
+            "EGM": {
+                "ele_Reco 2024Prompt Electron-ID-SF": "",
+                "ele_ID 2024Prompt Electron-ID-SF": "wp80iso",
+            },
+        },
     },
     "Prompt25": {
         "default": {

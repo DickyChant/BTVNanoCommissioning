@@ -28,6 +28,11 @@ axes = {
     "lepbmeth": hist.axis.IntCategory([0, 1], name="method", label="0: m(jjb) closest to m_t, 1: closest to the muon"),
     "mlbfine": hist.axis.Regular(30, 0, 300, name="mlb", label="$m(\\mu, b_{lep})$ [GeV]"),
     "mjjb": hist.axis.Regular(40, 100, 300, name="mjjb", label="$m(jjb)$ [GeV]"),
+    # electron mirror (single-electron trigger): IsoMu24 decision, and the leptonic-side diagnostics vs n_track
+    "mutrig": hist.axis.IntCategory([0, 1], name="mutrig", label="HLT_IsoMu24 fired"),
+    "dg_lpt": hist.axis.Regular(40, 0, 400, name="lpt", label="lepton $p_{T}$ [GeV]"),
+    "dg_dr": hist.axis.Regular(30, 0, 6, name="dr", label="$\\Delta R(\\ell, b)$"),
+    "dg_bpt": hist.axis.Regular(40, 0, 400, name="bpt", label="b-jet $p_{T}$ [GeV]"),
     "nbj": hist.axis.IntCategory(
         [0, 1, 2, 3, 4], name="nbj", label="N b-jets (DeepFlav-M)"
     ),

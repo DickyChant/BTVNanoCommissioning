@@ -67,6 +67,17 @@ NOMINAL_ONLY = (
     "hadW_lep_met",
     "hadW_lep_mlb",
     "upart_eff",
+    "dil_mlb_trg",
+    "dg_lpt",
+    "dg_dr",
+    "dg_bpt",
+    "dg_ntpv",
+    "dg_ntj",
+    "dgd_lpt",
+    "dgd_dr",
+    "dgd_bpt",
+    "dgd_ntpv",
+    "dgd_ntj",
 )
 
 
@@ -358,6 +369,39 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                             ak.to_numpy(pruned_ev[f"dil_mlb_{lep}_{tag}"]),
                             weight=weight,
                         )
+            elif "dil_mlb_trg" == histname and "dil_mutrig" in pruned_ev.fields:
+                for meth, tag in ((0, "dr"), (1, "mm")):
+                    for lep, pdg in (("mu", 13), ("e", 11)):
+                        output[histname].fill(
+                            syst,
+                            ak.to_numpy(pruned_ev.dil_mutrig),
+                            pdg,
+                            meth,
+                            ak.to_numpy(pruned_ev[f"dil_truth_{tag}"]),
+                            ak.to_numpy(pruned_ev.dil_nb),
+                            ak.to_numpy(pruned_ev.dil_ntrack),
+                            ak.to_numpy(pruned_ev[f"dil_mlb_{lep}_{tag}"]),
+                            weight=weight,
+                        )
+            elif histname.startswith("dgd_") and "dil_mutrig" in pruned_ev.fields:
+                v = histname[4:]
+                trg, nb, nt = (ak.to_numpy(pruned_ev[k]) for k in ("dil_mutrig", "dil_nb", "dil_ntrack"))
+                if v in ("ntpv", "ntj"):
+                    output[histname].fill(syst, trg, nb, nt, ak.to_numpy(pruned_ev[f"dgd_{v}"]), weight=weight)
+                else:
+                    for lep, pdg in (("mu", 13), ("e", 11)):
+                        output[histname].fill(
+                            syst, trg, pdg, nb, nt, ak.to_numpy(pruned_ev[f"dgd_{v}_{lep}"]), weight=weight
+                        )
+            elif histname.startswith("dg_") and "dg_lpt" in pruned_ev.fields:
+                valid = ak.to_numpy(pruned_ev.top_valid)
+                output[histname].fill(
+                    syst[valid],
+                    ak.to_numpy(pruned_ev.nbjet)[valid],
+                    ak.to_numpy(pruned_ev.n_track)[valid],
+                    ak.to_numpy(pruned_ev[histname])[valid],
+                    weight=weight[valid],
+                )
             elif "dil_ntrack" == histname and "dil_nb" in pruned_ev.fields:
                 output[histname].fill(
                     syst,
@@ -423,7 +467,13 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                             h.fill(
                                 syst,
                                 flatten(flav),
-                                flatten(sel_jet.delta_r(pruned_ev.SelMuon)),
+                                flatten(
+                                    sel_jet.delta_r(
+                                        pruned_ev.SelMuon
+                                        if "SelMuon" in pruned_ev.fields
+                                        else pruned_ev.SelElectron
+                                    )
+                                ),
                                 weight=weight,
                             )
                         else:

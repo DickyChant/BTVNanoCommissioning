@@ -75,6 +75,10 @@ workflows["validation"] = ValidationProcessor
 workflows["ttdilep_sf"] = partial(TTdilepValidSFProcessor, selectionModifier="tt_dilep")
 # e mu ttbar for the hadronic-W study: IsoMu24 (Muon PD), UParT b candidates, m(l, b) and n_track
 workflows["ttdilep_hadw"] = partial(TTdilepValidSFProcessor, selectionModifier="tt_dilep_hadw")
+# electron mirror of the hadronic-W study: e + jets and single-electron-triggered e mu in one pass
+from BTVNanoCommissioning.workflows.hadw_e import NanoProcessor as HadWElectronProcessor
+
+workflows["hadw_e"] = HadWElectronProcessor
 workflows["ttsemilep_sf"] = partial(
     TTsemilepValidSFProcessor, selectionModifier="tt_semilep"
 )

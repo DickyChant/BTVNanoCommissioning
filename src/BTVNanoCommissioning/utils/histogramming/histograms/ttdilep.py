@@ -58,4 +58,28 @@ def get_histograms(axes, **kwargs):
         hists["dil_ntrack"] = Hist.Hist(
             axes["syst"], axes["nbj"], axes["ntrack"], Hist.storage.Weight()
         )
+        if kwargs.get("elec", False):
+            # single-electron-triggered e mu: the same split by whether IsoMu24 also fired
+            hists["dil_mlb_trg"] = Hist.Hist(
+                axes["syst"],
+                axes["mutrig"],
+                axes["lepflav"],
+                axes["lepbmeth"],
+                axes["btruth"],
+                axes["nbj"],
+                axes["ntrack_c"],
+                axes["mlbfine"],
+                Hist.storage.Weight(),
+            )
+            # leptonic-side diagnostics against n_track per lepton (minimax pairing): lepton pT,
+            # Delta R(l, b), b pT; and the two n_track terms (PV tracks, ttbar-jet tracks)
+            for v, ax in (("lpt", "dg_lpt"), ("dr", "dg_dr"), ("bpt", "dg_bpt")):
+                hists[f"dgd_{v}"] = Hist.Hist(
+                    axes["syst"], axes["mutrig"], axes["lepflav"], axes["nbj"], axes["ntrack_c"], axes[ax],
+                    Hist.storage.Weight(),
+                )
+            for v in ("ntpv", "ntj"):
+                hists[f"dgd_{v}"] = Hist.Hist(
+                    axes["syst"], axes["mutrig"], axes["nbj"], axes["ntrack_c"], axes["ntrk"], Hist.storage.Weight()
+                )
     return hists

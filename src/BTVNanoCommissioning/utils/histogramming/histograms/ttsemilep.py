@@ -87,8 +87,15 @@ def get_histograms(axes, **kwargs):
                 axes["mW_c"],
                 Hist.storage.Weight(),
             )
-    for i in ["mu"]:
-        hists[f"{i}_pfRelIso04_all"] = Hist.Hist(
+        # leptonic-side diagnostics against n_track (leptonic b of the m(jjb) choice):
+        # lepton pT, Delta R(l, b_lep), b_lep pT, and the two n_track terms (PV tracks, ttbar-jet tracks)
+        for v, ax in (("lpt", "dg_lpt"), ("dr", "dg_dr"), ("bpt", "dg_bpt"), ("ntpv", "ntrk"), ("ntj", "ntrk")):
+            hists[f"dg_{v}"] = Hist.Hist(
+                axes["syst"], axes["nbj"], axes["ntrack_c"], axes[ax], Hist.storage.Weight()
+            )
+    # the selected lepton: a muon (IsoMu24) or, in the electron mirror, an electron (single-electron trigger)
+    for i in ["ele"] if kwargs.get("elec", False) else ["mu"]:
+        hists[f"{i}_pfRelIso04_all" if i == "mu" else f"{i}_pfRelIso03_all"] = Hist.Hist(
             axes["syst"], axes["iso"], Hist.storage.Weight()
         )
         hists[f"{i}_dxy"] = Hist.Hist(axes["syst"], axes["dxy"], Hist.storage.Weight())
