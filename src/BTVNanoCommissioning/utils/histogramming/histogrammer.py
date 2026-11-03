@@ -78,6 +78,15 @@ NOMINAL_ONLY = (
     "dgd_bpt",
     "dgd_ntpv",
     "dgd_ntj",
+    "jpsi_mass",
+    "jpsi_pt",
+    "jpsi_sip",
+    "jpsi_drj",
+    "jpsi_z",
+    "jpsi_mlj",
+    "jpsi_tt_mjj",
+    "jpsi_tt_mjjb",
+    "jpsi_tt_mlb",
 )
 
 
@@ -451,6 +460,51 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                     flatten(pruned_ev.upeff_tag),
                     weight=flatten(ak.broadcast_arrays(weight, pruned_ev.upeff_pt)[0]),
                 )
+            # J/psi -> mu mu on top of the ttbar selections (utils/jpsi.py): events with a dimuon only
+            elif histname.startswith("jpsi_") and "jpsi_valid" in pruned_ev.fields:
+                v = ak.to_numpy(pruned_ev.jpsi_valid)
+                if not v.any():
+                    continue
+                jf = lambda k: ak.to_numpy(pruned_ev[f"jpsi_{k}"])[v]  # noqa: E731
+                js, jw = syst[v], weight[v]
+                if histname == "jpsi_mass":
+                    h.fill(js, jf("os"), jf("nmed"), jf("cat"), jf("truth"), jf("nb"), jf("mass"), weight=jw)
+                elif histname == "jpsi_pt":
+                    h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("pt"), jf("absy"), weight=jw)
+                elif histname == "jpsi_sip":
+                    h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("sip"), weight=jw)
+                elif histname == "jpsi_drj":
+                    h.fill(js, jf("mreg"), jf("os"), jf("truth"), jf("drj"), weight=jw)
+                elif histname == "jpsi_z":
+                    inj = jf("cat") < 2
+                    h.fill(
+                        js[inj], jf("mreg")[inj], jf("os")[inj], jf("cat")[inj], jf("truth")[inj], jf("z")[inj],
+                        weight=jw[inj],
+                    )
+                elif histname in ("jpsi_tt_mjj", "jpsi_tt_mjjb"):
+                    key = histname[len("jpsi_"):]
+                    if f"jpsi_{key}" not in pruned_ev.fields:
+                        continue
+                    x = jf(key)
+                    ok = x > 0
+                    h.fill(js[ok], jf("mreg")[ok], jf("os")[ok], jf("cat")[ok], jf("nb")[ok], x[ok], weight=jw[ok])
+                elif histname == "jpsi_tt_mlb":
+                    for lep, pdg in (("mu", 13), ("e", 11)):
+                        if f"jpsi_tt_mlb_{lep}" not in pruned_ev.fields:
+                            continue
+                        x = jf(f"tt_mlb_{lep}")
+                        ok = x > 0
+                        h.fill(
+                            js[ok], pdg, jf("mreg")[ok], jf("os")[ok], jf("cat")[ok], jf("nb")[ok], x[ok], weight=jw[ok]
+                        )
+                elif histname == "jpsi_mlj":
+                    for lep, pdg in (("mu", 13), ("e", 11)):
+                        if f"jpsi_mlj_{lep}" not in pruned_ev.fields:
+                            continue
+                        h.fill(
+                            js, pdg, jf("mreg"), jf("os"), jf(f"rside_{lep}"), jf(f"tside_{lep}"), jf("nb"),
+                            jf("ntrack"), jf(f"mlj_{lep}"), weight=jw,
+                        )
             # Jet kinematics & deltaR between jet and lepton
             elif (
                 "jet" in histname and "posl" not in histname and "negl" not in histname

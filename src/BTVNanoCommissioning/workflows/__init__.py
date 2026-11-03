@@ -79,6 +79,11 @@ workflows["ttdilep_hadw"] = partial(TTdilepValidSFProcessor, selectionModifier="
 from BTVNanoCommissioning.workflows.hadw_e import NanoProcessor as HadWElectronProcessor
 
 workflows["hadw_e"] = HadWElectronProcessor
+# ttbar + J/psi -> mu mu in e + jets (utils/jpsi.py)
+workflows["ttsemilep_e_jpsi"] = partial(TTsemilepValidSFProcessor, selectionModifier="tt_semilep_e_jpsi")
+from BTVNanoCommissioning.workflows.hadw_e_jpsi import NanoProcessor as HadWEJpsiProcessor  # noqa: E402
+
+workflows["hadw_e_jpsi"] = HadWEJpsiProcessor
 workflows["ttsemilep_sf"] = partial(
     TTsemilepValidSFProcessor, selectionModifier="tt_semilep"
 )

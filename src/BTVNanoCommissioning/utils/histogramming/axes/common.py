@@ -33,6 +33,20 @@ axes = {
     "dg_lpt": hist.axis.Regular(40, 0, 400, name="lpt", label="lepton $p_{T}$ [GeV]"),
     "dg_dr": hist.axis.Regular(30, 0, 6, name="dr", label="$\\Delta R(\\ell, b)$"),
     "dg_bpt": hist.axis.Regular(40, 0, 400, name="bpt", label="b-jet $p_{T}$ [GeV]"),
+    # J/psi -> mu mu on top of the ttbar selections (utils/jpsi.py)
+    "mjpsi": hist.axis.Regular(100, 2.0, 4.5, name="mass", label="$m(\\mu\\mu)$ [GeV]"),
+    "mreg": hist.axis.IntCategory([0, 1, 2, 3], name="mreg", label="m(mu mu): 0 2.60-2.90, 1 2.95-3.25, 2 3.30-3.60, 3 other"),
+    "jpsinmed": hist.axis.IntCategory([0, 1, 2], name="nmed", label="J/psi muons passing the medium ID"),
+    "jpsicat": hist.axis.IntCategory([0, 1, 2], name="jpsicat", label="J/psi: 0 matched to a b jet (control), 1 in another jet, 2 in no jet"),
+    "jpsitruth": hist.axis.IntCategory([0, 1, 2], name="jpsitruth", label="MC: 0 prompt J/psi, 1 from b, 2 no J/psi / data"),
+    "jpsirside": hist.axis.IntCategory([0, 1, 2], name="rside", label="J/psi in the b of: 1 this lepton, 0 the other, 2 none (reco)"),
+    "jpsitside": hist.axis.IntCategory([0, 1, 2], name="tside", label="J/psi jet is the b of: 1 this lepton's top, 0 the other, 2 neither (MC)"),
+    "jpsipt": hist.axis.Variable([0, 3, 5, 8, 12, 16, 20, 25, 30, 40, 60, 100, 200], name="pt", label="$p_T(J/\\psi)$ [GeV]"),
+    "jpsiabsy": hist.axis.Variable([0, 0.9, 1.5, 2.4], name="absy", label="$|y(J/\\psi)|$"),
+    "jpsisip": hist.axis.Variable([0, 1, 2, 3, 4, 6, 8, 12, 20, 40, 100], name="sip", label="max SIP3D of the muons"),
+    "jpsidr": hist.axis.Variable([0, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1.2, 2.0, 4.0], name="dr", label="$\\Delta R$(J/$\\psi$, nearest jet)"),
+    "jpsiz": hist.axis.Regular(20, 0, 1, name="z", label="$p_T(J/\\psi) / p_T(jet)$"),
+    "mlj": hist.axis.Regular(25, 0, 250, name="mlj", label="$m(\\ell, J/\\psi)$ [GeV]"),
     "nbj": hist.axis.IntCategory(
         [0, 1, 2, 3, 4], name="nbj", label="N b-jets (DeepFlav-M)"
     ),

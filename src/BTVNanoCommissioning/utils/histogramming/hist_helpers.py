@@ -11,6 +11,7 @@ from .histograms.fourvec import get_histograms as fourvec_hists
 from .histograms.ttdilep_kin import get_histograms as ttdilep_kin_hists
 from .histograms.ttdilep import get_histograms as ttdilep_hists
 from .histograms.ttsemilep import get_histograms as ttsemilep_hists
+from .histograms.ttjpsi import get_histograms as ttjpsi_hists
 from .histograms.qcd import get_histograms as qcd_hists
 from .histograms.qcd_smu import get_histograms as qcd_smu_hists
 from .histograms.validation import get_histograms as validation_hists
@@ -56,6 +57,7 @@ def get_hist_collections(axes: dict, hist_collections: list, **kwargs):
         "ttdilep_kin": ttdilep_kin_hists,
         "ttdilep": ttdilep_hists,
         "ttsemilep": ttsemilep_hists,
+        "ttjpsi": ttjpsi_hists,
         "validation": validation_hists,
         "Wc": wc_hists,
         "qgtag": qgtag_hists,

@@ -6,6 +6,7 @@ import numpy as np, awkward as ak
 from coffea import processor
 from coffea.analysis_tools import Weights
 from BTVNanoCommissioning.utils.upart_sf import add_upart_weights
+from BTVNanoCommissioning.utils import jpsi as JPSI
 from BTVNanoCommissioning.utils.correction import (
     load_lumi,
     load_SF,
@@ -57,7 +58,7 @@ class NanoProcessor(processor.ProcessorABC):
         ## Load corrections
         self.SF_map = (
             load_SF(self._year, self._campaign, "tt_semilep_e")
-            if selectionModifier == "tt_semilep_e"
+            if selectionModifier in ("tt_semilep_e", "tt_semilep_e_jpsi")
             else load_SF(self._year, self._campaign)
         )
 
@@ -95,9 +96,10 @@ class NanoProcessor(processor.ProcessorABC):
                     ["ttsemilep"]
                     if os.environ.get("HADW_STUDY_HISTS")  # study histograms only (systematics runs)
                     else ["common", "fourvec", "ttsemilep"]
-                ),
+                )
+                + (["ttjpsi"] if self.ttaddsel == "tt_semilep_e_jpsi" else []),
                 c_ttsemilep=self.ttaddsel == "c_tt_semilep",
-                elec=self.ttaddsel == "tt_semilep_e",
+                elec=self.ttaddsel in ("tt_semilep_e", "tt_semilep_e_jpsi"),
             )
 
         if shift_name is None:
@@ -135,7 +137,7 @@ class NanoProcessor(processor.ProcessorABC):
 
         ## HLT
         # electron mirror of the hadronic-W study: single-electron trigger (EGamma PD), one tight electron
-        elec = self.ttaddsel == "tt_semilep_e"
+        elec = self.ttaddsel in ("tt_semilep_e", "tt_semilep_e_jpsi")
         # (Ele30_WPTight_Gsf: the lowest unprescaled 2024 path, the one with EGM trigger SFs)
         triggers = ["Ele30_WPTight_Gsf"] if elec else ["IsoMu24"]
         req_trig = HLT_helper(events, triggers)
@@ -154,6 +156,21 @@ class NanoProcessor(processor.ProcessorABC):
         # event_muon = ak.pad_none(events.Muon, 1, axis=1)
         req_muon = ak.count(event_muon.pt, axis=1) == 1
 
+        # J/psi -> mu mu (tt_semilep_e_jpsi): one dimuon from the loose-ID muons (no isolation) that are not
+        # tight isolated pT > 30 GeV muons (utils/jpsi.py). Its two muons are exempt from the jet cleaning below,
+        # which otherwise removes every jet within 0.4 of any muon, i.e. a jet that contains the J/psi.
+        jpsi_mode = self.ttaddsel == "tt_semilep_e_jpsi"
+        clean_mu = events.Muon
+        if jpsi_mode:
+            jinfo, jpair = JPSI.find_jpsi(
+                events,
+                JPSI.jpsi_muon_mask(
+                    events, (events.Muon.pt > 30) & btag_mu_idiso(events, self._campaign)
+                ),
+            )
+            jinfo["truth"] = JPSI.jpsi_truth(events, jinfo)
+            clean_mu = events.Muon[~jpair]
+
         ## Jet cuts
         # the electron mirror keeps the muon-channel jet definition (away from all muons) and also
         # removes jets within 0.4 of the selected electron
@@ -167,7 +184,7 @@ class NanoProcessor(processor.ProcessorABC):
                 jet_id(events, self._campaign)
                 & (
                     ak.all(
-                        events.Jet.metric_table(events.Muon) > 0.4,
+                        events.Jet.metric_table(clean_mu) > 0.4,
                         axis=2,
                         mask_identity=True,
                     )
@@ -243,7 +260,7 @@ class NanoProcessor(processor.ProcessorABC):
                 jet_id(events, self._campaign)
                 & (
                     ak.all(
-                        events.Jet.metric_table(events.Muon) > 0.4,
+                        events.Jet.metric_table(clean_mu) > 0.4,
                         axis=2,
                         mask_identity=True,
                     )
@@ -416,6 +433,35 @@ class NanoProcessor(processor.ProcessorABC):
             pruned_ev["dg_bpt"] = ak.fill_none(blep_mt.pt, -1.0)
             pruned_ev["dg_ntpv"] = ntrk_pv
             pruned_ev["dg_ntj"] = njet_trk
+
+            if jpsi_mode:
+                # b candidates: the two jets outside the W pair (none without a valid pair); the
+                # leptonic b of the lepton is the closer one (method 1, as for m(l, b_lep))
+                top_ok = ak.fill_none(two & has_pair, False)
+                bcands = others[ak.broadcast_arrays(top_ok, others.pt)[0]]
+                # b jets for the J/psi matching: the b candidates and every UParT-M tagged selected jet
+                jets_sel = event_jet[event_level]
+                try:
+                    bm_all = btag_wp(jets_sel, self._year, self._campaign, "UParTAK4", "b", "M")
+                except Exception:
+                    bm_all = jets_sel.btagUParTAK4B > 0.1272
+                assoc = JPSI.jet_association(
+                    jinfo["p4"][ak.to_numpy(event_level)], jets_sel, bcands, jets_sel[ak.fill_none(bm_all, False)]
+                )
+                JPSI.store(
+                    pruned_ev,
+                    jinfo,
+                    event_level,
+                    assoc,
+                    {("e" if elec else "mu"): (mu, ak.fill_none(ak.firsts(ilep_dr), -1))},
+                    pruned_ev.nbjet,
+                    pruned_ev.n_track,
+                    {
+                        "mjj": ak.where(pruned_ev.hadW_valid, pruned_ev.hadW_mass, -1.0),
+                        "mjjb": ak.where(pruned_ev.top_valid, pruned_ev.top_mjjb, -1.0),
+                        ("mlb_e" if elec else "mlb_mu"): ak.where(pruned_ev.top_valid, pruned_ev.lepb_mlb_dr, -1.0),
+                    },
+                )
 
         ####################
         #     Output       #
