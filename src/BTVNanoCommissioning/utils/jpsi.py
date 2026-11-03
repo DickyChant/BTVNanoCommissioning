@@ -11,6 +11,7 @@ categories 1 and 2 below; the b-matched J/psi (category 0, mostly from b-hadron 
 
 import awkward as ak
 import numpy as np
+from coffea.nanoevents.methods import candidate
 
 MJPSI = 3.0969
 MASS_LO, MASS_HI = 2.0, 4.5
@@ -22,6 +23,9 @@ DR_JET = 0.4  # the J/psi is "in" a jet within this Delta R of the jet axis
 # |l_xy| < 0.06 mm is prompt-like and l_xy > 0.1 mm is dominated by b-hadron decays; |z0| > 0.1 cm points to another vertex
 LXY_PROMPT, LXY_NONPROMPT = 0.06, 0.10  # mm
 Z0_PV = 0.1  # cm
+# BPHNano (low-mass double-muon parking): the J/psi must have fired this path, both of its muons matched to it
+BPH_TRIGGER = "DoubleMu4_3_LowMass"
+DR_SAME = 0.005  # a BPHMuon and a central Muon within this Delta R are the same muon
 
 
 def jpsi_muon_mask(events, exclude):
@@ -69,6 +73,69 @@ def find_jpsi(events, cand):
         **vtx,
     }
     return info, ak.fill_none(in_pair, False)
+
+
+def _cand(c, **extra):
+    """a collection without NanoAODSchema behaviour (BPHMuon, MuMu) as PtEtaPhiM candidates"""
+    fields = {k: c[k] for k in ("pt", "eta", "phi")}
+    fields["mass"] = extra.pop("mass", c["mass"])
+    fields["charge"] = extra.pop("charge", c["charge"] if "charge" in c.fields else ak.zeros_like(c["pt"]))
+    return ak.zip({**fields, **extra}, with_name="PtEtaPhiMCandidate", behavior=candidate.behavior)
+
+
+def find_jpsi_bph(events, exclude):
+    """BPHNano: the J/psi from the MuMu collection (kinematic vertex fit of two BPHMuon; opposite sign only), the
+    candidate with the highest vertex probability with fit mass in 2.0-4.5 GeV whose two muons both fired
+    HLT_DoubleMu4_3_LowMass (so the J/psi is what triggered the event), have |eta| < 2.4, pass the loose ID and are
+    not ttbar-lepton candidates (`exclude`: mask on events.Muon; BPHMuon and Muon matched within Delta R 0.005).
+    The decay length uses the fitted vertex: L = MuMu_vtx - PV, l_xy = m(J/psi) (L_xy . p_T) / p_T^2, its error
+    MuMu_l_xy_unc m / p_T, and z0 as in dimuon_vertex. Returns the info dict of find_jpsi and the mask of the
+    central muons that are the pair's (for the jet-cleaning exemption)."""
+    bm = _cand(events.BPHMuon, looseId=events.BPHMuon.looseId, mediumId=events.BPHMuon.mediumId,
+               sip3d=events.BPHMuon.sip3d, fired=events.BPHMuon[f"fired_HLT_{BPH_TRIGGER}"] > 0)
+    mm = events.MuMu
+    excl_mu = events.Muon[exclude]
+    bad = ak.fill_none(ak.any(bm.metric_table(excl_mu) < DR_SAME, axis=2), False)
+    m1, m2 = bm[mm.l1_idx], bm[mm.l2_idx]
+    mass = mm.fit_mass
+    ok = (
+        (mass > MASS_LO) & (mass < MASS_HI) & m1.fired & m2.fired & m1.looseId & m2.looseId
+        & (abs(m1.eta) < 2.4) & (abs(m2.eta) < 2.4) & ~bad[mm.l1_idx] & ~bad[mm.l2_idx]
+    )
+    best = ak.argmax(ak.where(ok, mm.svprob, -1.0), axis=1, keepdims=True)
+    valid = ak.fill_none(ak.firsts(ok[best]), False)
+    jp = ak.firsts(_cand(mm, mass=mass)[best])
+    b1, b2 = ak.firsts(m1[best]), ak.firsts(m2[best])
+    in_pair = ak.fill_none((events.Muon.delta_r(b1) < DR_SAME) | (events.Muon.delta_r(b2) < DR_SAME), False)
+    in_pair = in_pair & valid
+    energy, pz = jp.energy, jp.z
+    rap = 0.5 * np.log((energy + pz) / np.maximum(energy - pz, 1e-9))
+    v = ak.to_numpy(valid)
+    lx, ly = _np(ak.firsts(mm.vtx_x[best]) - events.PV.x, 0.0), _np(ak.firsts(mm.vtx_y[best]) - events.PV.y, 0.0)
+    lz = _np(ak.firsts(mm.vtx_z[best]) - events.PV.z, 0.0)
+    px, py, pzn, pt = _np(jp.px, 0.0), _np(jp.py, 0.0), _np(jp.pz, 0.0), _np(jp.pt, 0.0)
+    pt2 = np.maximum(px**2 + py**2, 1e-6)
+    proj = (lx * px + ly * py) / pt2
+    bad_ = lambda x: np.where(v, x, -99.0)  # noqa: E731
+    info = {
+        "valid": valid,
+        "p4": jp,
+        "os": np.ones(len(v), dtype=np.int64),
+        "mass": ak.fill_none(jp.mass, -1.0),
+        "pt": ak.fill_none(jp.pt, -1.0),
+        "absy": ak.fill_none(abs(rap), -1.0),
+        "sip": ak.fill_none(np.maximum(b1.sip3d, b2.sip3d), -1.0),
+        "nmed": ak.fill_none(ak.values_astype(b1.mediumId, np.int64) + ak.values_astype(b2.mediumId, np.int64), 0),
+        "i1": ak.fill_none(ak.firsts(mm.l1_idx[best]), -1),
+        "i2": ak.fill_none(ak.firsts(mm.l2_idx[best]), -1),
+        "lxy": bad_(10.0 * MJPSI * proj),
+        "lxyerr": bad_(10.0 * MJPSI * _np(ak.firsts(mm.l_xy_unc[best]), 0.0) / np.maximum(pt, 1e-3)),
+        "z0": bad_(lz - proj * pzn),
+        "vchi2": bad_(-2.0 * np.log(np.maximum(_np(ak.firsts(mm.svprob[best]), 1e-300), 1e-300))),
+        "vok": v,
+        "truth": np.full(len(v), 2, dtype=np.int64),
+    }
+    return info, in_pair
 
 
 def _np(x, fill):
@@ -225,6 +292,8 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
     for k in ("lxy", "lxyerr", "z0", "vchi2"):
         pruned_ev[f"jpsi_{k}"] = np.asarray(info[k])[sel]
     pruned_ev["jpsi_life"] = life_region(info)[sel]
+    # BPHNano: whether the single-lepton trigger of the channel also fired (overlap with the IsoMu24 / Ele30 sample)
+    pruned_ev["jpsi_sltrig"] = np.asarray(info["sltrig"])[sel] if "sltrig" in info else np.ones(int(sel.sum()), dtype=np.int64)
     pruned_ev["jpsi_truth"] = info["truth"][sel]
     for k in ("cat", "drj", "z"):
         pruned_ev[f"jpsi_{k}"] = assoc[k]

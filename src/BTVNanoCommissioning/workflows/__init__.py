@@ -4,6 +4,7 @@ from functools import partial
 
 from BTVNanoCommissioning.workflows.ttdilep_valid_sf import NanoProcessor as TTdilepValidSFProcessor
 from BTVNanoCommissioning.workflows.ttJ import NanoProcessor as TTJProcessor
+from BTVNanoCommissioning.workflows.ttJ_bph import NanoProcessor as TTJBPHProcessor
 from BTVNanoCommissioning.workflows.ttsemilep_valid_sf import NanoProcessor as TTsemilepValidSFProcessor
 
 workflows = {}
@@ -15,5 +16,10 @@ workflows["ttJ_ejets"] = partial(TTsemilepValidSFProcessor, selectionModifier="t
 workflows["ttJ_emu"] = partial(TTdilepValidSFProcessor, selectionModifier="tt_dilep_jpsi")
 # the three channels in one pass (data: the channels of its primary dataset)
 workflows["ttJ"] = TTJProcessor
+# BPHNano of the low-mass double-muon parking: triggered by the J/psi (HLT_DoubleMu4_3_LowMass), ttbar leptons offline
+workflows["ttJ_bph_mujets"] = partial(TTsemilepValidSFProcessor, selectionModifier="tt_semilep_jpsi_bph")
+workflows["ttJ_bph_ejets"] = partial(TTsemilepValidSFProcessor, selectionModifier="tt_semilep_e_jpsi_bph")
+workflows["ttJ_bph_emu"] = partial(TTdilepValidSFProcessor, selectionModifier="tt_dilep_jpsi_bph")
+workflows["ttJ_bph"] = TTJBPHProcessor
 
 __all__ = ["workflows"]

@@ -53,6 +53,9 @@ class NanoProcessor(processor.ProcessorABC):
         self.noHist = noHist
         self.lumiMask = load_lumi(self._campaign)
         self.chunksize = chunksize
+        # "<mode>_bph": the same selection on BPHNano of the low-mass double-muon parking (utils/jpsi.py find_jpsi_bph)
+        self.bph = selectionModifier.endswith("_bph")
+        selectionModifier = selectionModifier[: -len("_bph")] if self.bph else selectionModifier
         ### Added selection for ttbar semileptonic
         self.ttaddsel = selectionModifier
         ## Load corrections
@@ -140,6 +143,12 @@ class NanoProcessor(processor.ProcessorABC):
         elec = self.ttaddsel in ("tt_semilep_e", "tt_semilep_e_jpsi")
         # (Ele30_WPTight_Gsf: the lowest unprescaled 2024 path, the one with EGM trigger SFs)
         triggers = ["Ele30_WPTight_Gsf"] if elec else ["IsoMu24"]
+        sltrig = None
+        if self.bph:
+            # parking: the low-mass dimuon trigger, fired by the J/psi (both of its muons matched to it, find_jpsi_bph);
+            # the channel's single-lepton trigger is only recorded, for the overlap with the IsoMu24 / Ele30 sample
+            sltrig = np.asarray(HLT_helper(events, triggers)).astype(np.int64)
+            triggers = [JPSI.BPH_TRIGGER]
         req_trig = HLT_helper(events, triggers)
 
         ## Muon cuts
@@ -162,13 +171,13 @@ class NanoProcessor(processor.ProcessorABC):
         jpsi_mode = self.ttaddsel in ("tt_semilep_jpsi", "tt_semilep_e_jpsi")
         clean_mu = events.Muon
         if jpsi_mode:
-            jinfo, jpair = JPSI.find_jpsi(
-                events,
-                JPSI.jpsi_muon_mask(
-                    events, (events.Muon.pt > 30) & btag_mu_idiso(events, self._campaign)
-                ),
-            )
-            jinfo["truth"] = JPSI.jpsi_truth(events, jinfo)
+            ttmu = (events.Muon.pt > 30) & btag_mu_idiso(events, self._campaign)
+            if self.bph:
+                jinfo, jpair = JPSI.find_jpsi_bph(events, ttmu)
+                jinfo["sltrig"] = sltrig
+            else:
+                jinfo, jpair = JPSI.find_jpsi(events, JPSI.jpsi_muon_mask(events, ttmu))
+                jinfo["truth"] = JPSI.jpsi_truth(events, jinfo)
             clean_mu = events.Muon[~jpair]
 
         ## Jet cuts
@@ -292,6 +301,8 @@ class NanoProcessor(processor.ProcessorABC):
         # Combine masks with the original conditions
         if self.ttaddsel == "c_tt_semilep":
             event_level = ak.fill_none(event_level & req_w_mass & req_c_jets, False)
+        if self.bph:  # parking: only events whose dimuon trigger is the J/psi candidate
+            event_level = event_level & ak.to_numpy(jinfo["valid"])
         if len(events[event_level]) == 0:
             if self.isArray:
                 array_writer(

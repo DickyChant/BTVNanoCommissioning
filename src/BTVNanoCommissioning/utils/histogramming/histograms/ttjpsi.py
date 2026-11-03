@@ -9,12 +9,12 @@ def get_histograms(axes, **kwargs):
     hists = {}
     hists["jpsi_mass"] = Hist.Hist(
         axes["syst"], axes["osss"], axes["jpsinmed"], axes["jpsicat"], axes["jpsitruth"], axes["nbj"], axes["jpsilife"],
-        axes["mjpsi"], Hist.storage.Weight(),
+        axes["jpsisltrig"], axes["mjpsi"], Hist.storage.Weight(),
     )
     # pseudo-proper decay length, by |z0| (pileup) and N_b
     hists["jpsi_lxy"] = Hist.Hist(
-        axes["syst"], axes["mreg"], axes["osss"], axes["jpsicat"], axes["jpsitruth"], axes["nbj"], axes["jpsiz0"], axes["jpsilxy"],
-        Hist.storage.Weight(),
+        axes["syst"], axes["mreg"], axes["osss"], axes["jpsicat"], axes["jpsitruth"], axes["nbj"], axes["jpsisltrig"], axes["jpsiz0"],
+        axes["jpsilxy"], Hist.storage.Weight(),
     )
     hists["jpsi_pt"] = Hist.Hist(
         axes["syst"], axes["mreg"], axes["osss"], axes["jpsicat"], axes["jpsitruth"], axes["jpsilife"], axes["jpsipt"],

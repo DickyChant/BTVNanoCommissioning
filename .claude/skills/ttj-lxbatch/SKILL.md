@@ -1,6 +1,6 @@
 ---
 name: ttj-lxbatch
-description: Run the ttJ (ttbar + J/psi -> mu mu) workflow of this branch on CERN lxbatch with HTCondor + eossubmit - smoke tests, job splitting, submission from lxplus, monitoring, resubmission and the summary builder. Use whenever running, monitoring or resubmitting ttJ jobs, or building results from their outputs.
+description: Run the ttJ / ttJ_bph (ttbar + J/psi -> mu mu, single-lepton-triggered or on BPHNano of the low-mass double-muon parking) workflows of this branch on CERN lxbatch with HTCondor + eossubmit - smoke tests, job splitting, submission from lxplus, monitoring, resubmission and the summary builder. Use whenever running, monitoring or resubmitting ttJ jobs, or building results from their outputs.
 ---
 
 # ttJ on lxbatch
@@ -87,6 +87,23 @@ It sums the nominal histograms per channel and writes the J/psi spectra, the sid
 (window 2.95-3.25 GeV minus half of 2.60-2.90 and 3.30-3.60 GeV), the b-matched / not-b-matched categories, the
 lifetime regions (prompt |l_xy| < 0.06 mm, non-prompt l_xy > 0.1 mm, pileup-like |z0| >= 0.1 cm) and the ttbar
 kinematics of the J/psi events. It also reads the older hadw_jpsi / hadw_e_jpsi outputs ("sl"/"dil" channels).
+
+## BPHNano: low-mass double-muon parking (workflow ttJ_bph)
+
+- **Inputs:** BPHNano of ParkingDoubleMuonLowMass* = NanoAODv15 plus the BPH collections (`MuMu_*` vertex fit,
+  `BPHMuon_*` with per-muon trigger flags). No central 2024 BPHNano exists (private 2024C/D/E productions, two
+  streams); central 2025 PromptReco parking NanoAOD is BPHNano (eight streams). The streams split the events, so a
+  subset of streams is a subset of the luminosity: say which streams were used.
+- **Trigger, carefully:** the event must fire `HLT_DoubleMu4_3_LowMass` and both J/psi muons must be matched to it
+  (`BPHMuon_fired_HLT_DoubleMu4_3_LowMass`): the J/psi is what triggered the event. The ttbar leptons are selected
+  offline only. Whether the channel's single-lepton trigger (IsoMu24 / Ele30) also fired is kept as the `sltrig` axis:
+  those events are also in the single-lepton-triggered ttJ sample, so remove them (sltrig = 0) before combining the two.
+  Do not mix other parking paths in without asking: their prescales and thresholds differ by run.
+- **J/psi:** from `MuMu` (opposite sign only, so no same-sign control): the highest `svprob` candidate in 2.0-4.5 GeV
+  (fit mass); l_xy = m (L_xy . p_T) / p_T^2 from `MuMu_vtx - PV`. `MuMu_l_xy` itself is the plain transverse decay length.
+- **Normalisation:** every selected event has a triggered dimuon, so "per ttbar event" is not the single-lepton
+  sample's quantity; compare yields per luminosity.
+- **Jobs:** `TTJ_WF=ttJ_bph` in the submit file; 20 files per job (the files are small).
 
 ## Do not
 

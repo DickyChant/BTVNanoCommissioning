@@ -49,6 +49,7 @@ axes = {
     # pseudo-proper decay length from the two-muon vertex (utils/jpsi.py dimuon_vertex) and the J/psi line's z at the PV
     "jpsilxy": hist.axis.Regular(100, -0.5, 1.5, name="lxy", label="$\\ell_{xy}$ [mm]"),
     "jpsiz0": hist.axis.Variable([0, 0.02, 0.05, 0.1, 0.3, 1, 30], name="z0", label="$|z_0|$ [cm]"),
+    "jpsisltrig": hist.axis.IntCategory([0, 1], name="sltrig", label="single-lepton trigger of the channel fired (BPHNano)"),
     "jpsilife": hist.axis.IntCategory([0, 1, 2, 3, 4], name="life", label="0 prompt, 1 non-prompt, 2 in between, 3 pileup-like, 4 no vertex"),
     "mlj": hist.axis.Regular(25, 0, 250, name="mlj", label="$m(\\ell, J/\\psi)$ [GeV]"),
     "nbj": hist.axis.IntCategory(

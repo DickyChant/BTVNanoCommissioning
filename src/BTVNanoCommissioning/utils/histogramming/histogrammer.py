@@ -469,9 +469,11 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                 jf = lambda k: ak.to_numpy(pruned_ev[f"jpsi_{k}"])[v]  # noqa: E731
                 js, jw = syst[v], weight[v]
                 if histname == "jpsi_mass":
-                    h.fill(js, jf("os"), jf("nmed"), jf("cat"), jf("truth"), jf("nb"), jf("life"), jf("mass"), weight=jw)
+                    h.fill(js, jf("os"), jf("nmed"), jf("cat"), jf("truth"), jf("nb"), jf("life"), jf("sltrig"), jf("mass"), weight=jw)
                 elif histname == "jpsi_lxy":
-                    h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("nb"), np.abs(jf("z0")), jf("lxy"), weight=jw)
+                    h.fill(
+                        js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("nb"), jf("sltrig"), np.abs(jf("z0")), jf("lxy"), weight=jw
+                    )
                 elif histname == "jpsi_pt":
                     h.fill(js, jf("mreg"), jf("os"), jf("cat"), jf("truth"), jf("life"), jf("pt"), jf("absy"), weight=jw)
                 elif histname == "jpsi_sip":

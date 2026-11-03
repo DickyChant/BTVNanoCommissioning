@@ -33,9 +33,14 @@ def channels(dataset, is_data):
 
 
 class NanoProcessor(processor.ProcessorABC):
+    MODES = MODES
+
+    def channels(self, dataset, is_data):
+        return channels(dataset, is_data)
+
     def __init__(self, year="2022", campaign="Summer22Run3", name="", isSyst=False, isArray=False, noHist=False, chunksize=75000):
         args = (year, campaign, name, isSyst, isArray, noHist, chunksize)
-        self.procs = {ch: cls(*args, selectionModifier=mod) for ch, (cls, mod) in MODES.items()}
+        self.procs = {ch: cls(*args, selectionModifier=mod) for ch, (cls, mod) in self.MODES.items()}
         self._ttrw = "none"
 
     # the runner sets ttbar_reweights on the processor after construction: pass it on
@@ -53,7 +58,7 @@ class NanoProcessor(processor.ProcessorABC):
         dataset = events.metadata["dataset"]
         is_data = not hasattr(events, "genWeight")
         # no processor modifies `events` (the selections work on shifted copies)
-        return {dataset: {ch: self.procs[ch].process(events)[dataset] for ch in channels(dataset, is_data)}}
+        return {dataset: {ch: self.procs[ch].process(events)[dataset] for ch in self.channels(dataset, is_data)}}
 
     def postprocess(self, accumulator):
         return accumulator
