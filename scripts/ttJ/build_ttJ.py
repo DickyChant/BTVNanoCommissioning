@@ -32,7 +32,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if len(sys.argv) < 3:
     sys.exit(__doc__)
 OUTDIRS, RES = sys.argv[1:-1], sys.argv[-1]
-XSEC = json.load(open("/eos/user/s/sqian/check_had_W_mass_ttbar/jobs_hadw/xsec_map.json"))
+# MC cross sections {dataset: pb} for the MC normalisation (not needed for data): $TTJ_XSEC or xsec_map.json next to this script
+_xs = os.environ.get("TTJ_XSEC", os.path.join(HERE, "xsec_map.json"))
+XSEC = json.load(open(_xs)) if os.path.exists(_xs) else {}
 EXTRA = {"TbarWplustoLNu2Q_TuneCP5_13p6TeV_powheg-pythia8": 2.0}  # tW -> l nu qq exists for tbar W+ only: x2 for both charges
 PROCS = {
     "tt_lj": ["TTtoLNu2Q_TuneCP5_13p6TeV_powheg-pythia8"],
