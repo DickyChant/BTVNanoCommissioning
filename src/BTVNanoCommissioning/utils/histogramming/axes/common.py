@@ -14,6 +14,23 @@ axes = {
         60, -10, 110, name="ntrack", label="$n_{trk}^{PV}-n_{trk}^{t\\bar{t}}$"
     ),
     "ntrk": hist.axis.Regular(60, 0, 120, name="ntrk", label="$n_{trk}$"),
+    "lepq": hist.axis.IntCategory([-1, 1], name="charge", label="muon charge"),
+    "lepflav": hist.axis.IntCategory([13, 11], name="lepflav", label="lepton |PDG id| of the m(l, b) pair"),
+    "lepmT": hist.axis.Regular(16, 0, 160, name="mT", label="$m_T(\\mu, MET)$ [GeV]"),
+    "lepmet": hist.axis.Regular(16, 50, 290, name="met", label="MET [GeV]"),
+    "lepmlb": hist.axis.Regular(20, 0, 300, name="mlb", label="min $m(\\mu, j)$ [GeV]"),
+    "ntrack_c": hist.axis.Variable(
+        [-10, 0, 12, 24, 36, 48, 60, 76, 96, 110], name="ntrack", label="$n_{track}$"
+    ),
+    "mW_c": hist.axis.Regular(25, 40, 140, name="mass", label="$m_{jj}$ [GeV]"),
+    "btruth": hist.axis.IntCategory([0, 1, 2], name="btruth", label="leptonic b: 0 wrong, 1 right, 2 not b / data"),
+    "agree": hist.axis.IntCategory([0, 1], name="agree", label="the two leptonic-b choices agree"),
+    "lepbmeth": hist.axis.IntCategory([0, 1], name="method", label="0: m(jjb) closest to m_t, 1: closest to the muon"),
+    "mlbfine": hist.axis.Regular(30, 0, 300, name="mlb", label="$m(\\mu, b_{lep})$ [GeV]"),
+    "mjjb": hist.axis.Regular(40, 100, 300, name="mjjb", label="$m(jjb)$ [GeV]"),
+    "nbj": hist.axis.IntCategory(
+        [0, 1, 2, 3, 4], name="nbj", label="N b-jets (DeepFlav-M)"
+    ),
     "bdt": hist.axis.Regular(50, 0, 1, name="bdt", label=" BDT discriminant"),
     "eta": hist.axis.Regular(25, -2.5, 2.5, name="eta", label=" $\eta$"),
     "phi": hist.axis.Regular(30, -3, 3, name="phi", label="$\phi$"),

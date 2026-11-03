@@ -305,6 +305,9 @@ correction_config = {
         "default": {
             "DC": "Cert_Collisions2024_378981_386951_Golden.json",
             "LUM": "puWeights_BCDEFGHI.json.gz",
+            # pinned to the JEC release used for the July 2026 hadW-mass study
+            # (Summer24Prompt24_V3); cvmfs "latest" moved to V5 on 2026-07-16
+            "JME_path": "/cvmfs/cms-griddata.cern.ch/cat/metadata/JME/Run3-24CDEReprocessingFGHIPrompt-Summer24-NanoAODv15/2026-06-05/jet_jerc.json.gz",
             "JME": {
                 "MC": "Summer24Prompt24_V3 Summer24Prompt24_JRV1",
                 "Run2024C": "Summer24Prompt24_V3",

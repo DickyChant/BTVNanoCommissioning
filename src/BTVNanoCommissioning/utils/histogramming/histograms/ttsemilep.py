@@ -1,5 +1,7 @@
 import hist as Hist
 
+from BTVNanoCommissioning.utils.upart_sf import ETA_EDGES, PT_EDGES
+
 
 def get_histograms(axes, **kwargs):
     hists = {}
@@ -31,6 +33,60 @@ def get_histograms(axes, **kwargs):
         hists["hadW_mass_vs_ntrack"] = Hist.Hist(
             axes["syst"], axes["ntrack"], axes["mW"], Hist.storage.Weight()
         )
+        # b-jet multiplicity, and the profile sliced by it (to purify ttbar:
+        # slice nbj>=1 or >=2 at plot time)
+        hists["nbjet"] = Hist.Hist(axes["syst"], axes["nbj"], Hist.storage.Weight())
+        hists["hadW_mass_vs_ntrack_nb"] = Hist.Hist(
+            axes["syst"], axes["nbj"], axes["ntrack"], axes["mW"], Hist.storage.Weight()
+        )
+        # leptonic side: charge split of the full histogram, and each leptonic
+        # variable against charge, N_b, coarse n_track and m_jj
+        hists["hadW_lep_charge"] = Hist.Hist(
+            axes["syst"],
+            axes["lepq"],
+            axes["nbj"],
+            axes["ntrack"],
+            axes["mW"],
+            Hist.storage.Weight(),
+        )
+        # leptonic b: m(mu, b_lep) by assignment method and MC truth; hadronic top mass
+        hists["hadW_lepb_mlb"] = Hist.Hist(
+            axes["syst"],
+            axes["lepbmeth"],
+            axes["agree"],
+            axes["btruth"],
+            axes["nbj"],
+            axes["ntrack_c"],
+            axes["mlbfine"],
+            Hist.storage.Weight(),
+        )
+        hists["hadW_top_mjjb"] = Hist.Hist(
+            axes["syst"],
+            axes["btruth"],
+            axes["nbj"],
+            axes["ntrack_c"],
+            axes["mjjb"],
+            Hist.storage.Weight(),
+        )
+        # UParT tagging efficiency per jet (MC): hadron flavour x pT x |eta| x tagged, for the
+        # method-1a b-tag SFs (utils/upart_sf.py); filled for the nominal weight only
+        hists["upart_eff"] = Hist.Hist(
+            Hist.axis.IntCategory([0, 4, 5], name="flav"),
+            Hist.axis.Variable(PT_EDGES, name="pt"),
+            Hist.axis.Variable(ETA_EDGES, name="abseta"),
+            Hist.axis.IntCategory([0, 1], name="tag"),
+            Hist.storage.Weight(),
+        )
+        for v in ("mT", "met", "mlb"):
+            hists[f"hadW_lep_{v}"] = Hist.Hist(
+                axes["syst"],
+                axes[f"lep{v}"],
+                axes["lepq"],
+                axes["nbj"],
+                axes["ntrack_c"],
+                axes["mW_c"],
+                Hist.storage.Weight(),
+            )
     for i in ["mu"]:
         hists[f"{i}_pfRelIso04_all"] = Hist.Hist(
             axes["syst"], axes["iso"], Hist.storage.Weight()

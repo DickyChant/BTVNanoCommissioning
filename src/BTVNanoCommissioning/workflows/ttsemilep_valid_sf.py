@@ -5,6 +5,7 @@ import numpy as np, awkward as ak
 
 from coffea import processor
 from coffea.analysis_tools import Weights
+from BTVNanoCommissioning.utils.upart_sf import add_upart_weights
 from BTVNanoCommissioning.utils.correction import (
     load_lumi,
     load_SF,
@@ -85,7 +86,11 @@ class NanoProcessor(processor.ProcessorABC):
             output = histogrammer(
                 events.Jet.fields,
                 obj_list=objs,
-                hist_collections=["common", "fourvec", "ttsemilep"],
+                hist_collections=(
+                    ["ttsemilep"]
+                    if os.environ.get("HADW_STUDY_HISTS")  # study histograms only (systematics runs)
+                    else ["common", "fourvec", "ttsemilep"]
+                ),
                 c_ttsemilep=self.ttaddsel == "c_tt_semilep",
             )
 
@@ -287,13 +292,24 @@ class NanoProcessor(processor.ProcessorABC):
         ###############################################################
         if self.ttaddsel != "c_tt_semilep":
             sel4 = pruned_ev.SelJet  # leading-4 selected jets (the ttbar jets)
-            # b tag (DeepJet medium): the hadronic W is the pair of non-b light jets
+            # b tag (UParT medium, the 2024 recommendation): the hadronic W is the pair
+            # of non-b light jets. (DeepJet has no 2024 working point in the BTV
+            # metadata; the earlier btag_wp("DeepFlav") call fell back to > 0.3.)
             try:
-                bmask = btag_wp(sel4, self._year, self._campaign, "DeepFlav", "b", "M")
+                bmask = btag_wp(sel4, self._year, self._campaign, "UParTAK4", "b", "M")
             except Exception:
                 # fallback if BTV WP metadata is unavailable for this campaign
-                bmask = sel4.btagDeepFlavB > 0.3
+                bmask = sel4.btagUParTAK4B > 0.1272
             bmask = ak.fill_none(bmask, False)
+            if "hadronFlavour" in sel4.fields:
+                # per-jet inputs of the UParT SFs and of the tagging-efficiency histogram (MC)
+                pruned_ev["upeff_pt"] = sel4.pt
+                pruned_ev["upeff_eta"] = sel4.eta
+                pruned_ev["upeff_flav"] = ak.values_astype(sel4.hadronFlavour, np.int64)
+                pruned_ev["upeff_tag"] = ak.values_astype(bmask, np.int64)
+            # b-jet multiplicity (DeepFlav-M) among the 4 ttbar jets -> lets us
+            # slice inclusive / >=1b / >=2b at plot time to purify ttbar
+            pruned_ev["nbjet"] = ak.values_astype(ak.sum(bmask, axis=1), np.int64)
             light = sel4[~bmask]
             # all non-b light-jet pairs; pick the one closest to m_W = 80.4 GeV
             pairs = ak.combinations(light, 2, fields=["j1", "j2"])
@@ -303,6 +319,60 @@ class NanoProcessor(processor.ProcessorABC):
             hadW_mass = ak.firsts(pair_mass[best])
             pruned_ev["hadW_valid"] = ak.fill_none(has_pair, False)
             pruned_ev["hadW_mass"] = ak.fill_none(hadW_mass, -1.0)
+
+            # Leptonic side, to separate ttbar from W+jets without touching the
+            # hadronic pairing: muon charge (W+jets is charge-asymmetric), mT(mu,
+            # MET), MET, and the smaller m(mu, j) of the two jets left after the
+            # W pair (the leptonic b in ttbar: endpoint ~153 GeV).
+            mu = pruned_ev.SelMuon
+            met = pruned_ev.MET
+            pruned_ev["lep_charge"] = ak.values_astype(mu.charge, np.int64)
+            pruned_ev["lep_met"] = met.pt
+            pruned_ev["lep_mT"] = np.sqrt(
+                2.0 * mu.pt * met.pt * (1.0 - np.cos(mu.phi - met.phi))
+            )
+            jidx = ak.local_index(sel4.pt)
+            pidx = ak.combinations(jidx[~bmask], 2, fields=["i1", "i2"])
+            i1 = ak.fill_none(ak.firsts(pidx.i1[best]), -1)
+            i2 = ak.fill_none(ak.firsts(pidx.i2[best]), -1)
+            others = sel4[(jidx != i1) & (jidx != i2)]
+            mlb = ak.min((others + mu).mass, axis=1)
+            pruned_ev["lep_mlb"] = ak.fill_none(mlb, -1.0)
+
+            # The two jets outside the W pair are the b candidates (with N_b = 2,
+            # the two b tags). Hadronic b: the one whose mass with the W pair is
+            # closest to m_t = 172.5 GeV; leptonic b: the other. Geometric
+            # alternative: the leptonic b is the candidate closest to the muon.
+            two = ak.num(others.pt, axis=1) == 2
+            wvec = ak.firsts((pairs.j1 + pairs.j2)[best])
+            mjjb = (others + wvec).mass
+            ihad = ak.argmin(np.abs(mjjb - 172.5), axis=1, keepdims=True)
+            ilep_mt = 1 - ihad
+            ilep_dr = ak.argmin(others.delta_r(mu), axis=1, keepdims=True)
+            blep_mt = ak.firsts(others[ilep_mt])
+            blep_dr = ak.firsts(others[ilep_dr])
+            pruned_ev["top_valid"] = ak.fill_none(two & has_pair, False)
+            pruned_ev["lepb_agree"] = ak.values_astype(
+                ak.fill_none(ak.firsts(ilep_mt == ilep_dr), False), np.int64
+            )
+            pruned_ev["top_mjjb"] = ak.fill_none(ak.firsts(mjjb[ihad]), -1.0)
+            pruned_ev["lepb_mlb_mt"] = ak.fill_none((mu + blep_mt).mass, -1.0)
+            pruned_ev["lepb_mlb_dr"] = ak.fill_none((mu + blep_dr).mass, -1.0)
+            # MC truth of the leptonic-b choice: the leptonic top of a mu+ is a t,
+            # its b has partonFlavour +5 (and -5 for a mu-). 1 right b, 0 the
+            # other b, 2 not a b (or data).
+            if "partonFlavour" in sel4.fields:
+                want = 5 * mu.charge
+
+                def truth(bj):
+                    pf = ak.fill_none(bj.partonFlavour, 0)
+                    return ak.where(pf == want, 1, ak.where(pf == -want, 0, 2))
+
+                pruned_ev["lepb_truth_mt"] = ak.values_astype(truth(blep_mt), np.int64)
+                pruned_ev["lepb_truth_dr"] = ak.values_astype(truth(blep_dr), np.int64)
+            else:
+                pruned_ev["lepb_truth_mt"] = ak.values_astype(ak.full_like(mu.pt, 2), np.int64)
+                pruned_ev["lepb_truth_dr"] = ak.values_astype(ak.full_like(mu.pt, 2), np.int64)
 
             # Track observable: PV tracks (from PV_ndof) minus the charged
             # constituents of the ttbar jets minus the selected muon (1 track).
@@ -326,6 +396,8 @@ class NanoProcessor(processor.ProcessorABC):
             ttbar_reweights=getattr(self, "ttbar_reweights", "none"),
             campaign=self._campaign,
         )
+        # UParT b-tag SFs, method 1a (N_b is counted among the 4 leading jets)
+        add_upart_weights(weights, pruned_ev, self._campaign, "semilep", self.isSyst)
         # Configure systematics
         if shift_name is None:
             systematics = ["nominal"] + list(weights.variations)

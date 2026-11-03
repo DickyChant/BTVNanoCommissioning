@@ -60,6 +60,16 @@ def histo_writer(pruned_ev, output, weights, systematics, isSyst, SF_map):
 
 
 # Filled common histogram
+NOMINAL_ONLY = (
+    "hadW_mass_vs_ntrack",
+    "hadW_lep_charge",
+    "hadW_lep_mT",
+    "hadW_lep_met",
+    "hadW_lep_mlb",
+    "upart_eff",
+)
+
+
 def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
     """
     Write histograms to the output dictionary based on pruned events and other parameters.
@@ -139,6 +149,9 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
         syst = np.full(len(weight), syst)
         # Loop over the histograms
         for histname, h in output.items():
+            # large hadronic-W study histograms and the tagging efficiency: nominal only
+            if syst_perjet != "nominal" and histname in NOMINAL_ONLY:
+                continue
             # Tagger score histograms
             if (
                 "Deep" in histname
@@ -290,6 +303,109 @@ def histo_writter(pruned_ev, output, weights, systematics, isSyst, SF_map):
                     ak.to_numpy(pruned_ev.n_track)[valid],
                     ak.to_numpy(pruned_ev.hadW_mass)[valid],
                     weight=weight[valid],
+                )
+            elif "nbjet" == histname and "nbjet" in pruned_ev.fields:
+                output["nbjet"].fill(
+                    syst, ak.to_numpy(pruned_ev.nbjet), weight=weight
+                )
+            elif (
+                "hadW_mass_vs_ntrack_nb" == histname
+                and "hadW_mass" in pruned_ev.fields
+            ):
+                valid = ak.to_numpy(pruned_ev.hadW_valid)
+                output["hadW_mass_vs_ntrack_nb"].fill(
+                    syst[valid],
+                    ak.to_numpy(pruned_ev.nbjet)[valid],
+                    ak.to_numpy(pruned_ev.n_track)[valid],
+                    ak.to_numpy(pruned_ev.hadW_mass)[valid],
+                    weight=weight[valid],
+                )
+            elif "hadW_lepb_mlb" == histname and "top_valid" in pruned_ev.fields:
+                valid = ak.to_numpy(pruned_ev.top_valid)
+                for meth, tag in ((0, "mt"), (1, "dr")):
+                    output[histname].fill(
+                        syst[valid],
+                        meth,
+                        ak.to_numpy(pruned_ev.lepb_agree)[valid],
+                        ak.to_numpy(pruned_ev[f"lepb_truth_{tag}"])[valid],
+                        ak.to_numpy(pruned_ev.nbjet)[valid],
+                        ak.to_numpy(pruned_ev.n_track)[valid],
+                        ak.to_numpy(pruned_ev[f"lepb_mlb_{tag}"])[valid],
+                        weight=weight[valid],
+                    )
+            elif "dil_mlb" == histname and "dil_nb" in pruned_ev.fields:
+                for meth, tag in ((0, "dr"), (1, "mm")):
+                    for lep in ("mu", "e"):
+                        output[histname].fill(
+                            syst,
+                            meth,
+                            ak.to_numpy(pruned_ev[f"dil_truth_{tag}"]),
+                            ak.to_numpy(pruned_ev.dil_nb),
+                            ak.to_numpy(pruned_ev.dil_ntrack),
+                            ak.to_numpy(pruned_ev[f"dil_mlb_{lep}_{tag}"]),
+                            weight=weight,
+                        )
+            elif "dil_mlb_fl" == histname and "dil_nb" in pruned_ev.fields:
+                for meth, tag in ((0, "dr"), (1, "mm")):
+                    for lep, pdg in (("mu", 13), ("e", 11)):
+                        output[histname].fill(
+                            syst,
+                            pdg,
+                            meth,
+                            ak.to_numpy(pruned_ev[f"dil_truth_{tag}"]),
+                            ak.to_numpy(pruned_ev.dil_nb),
+                            ak.to_numpy(pruned_ev.dil_ntrack),
+                            ak.to_numpy(pruned_ev[f"dil_mlb_{lep}_{tag}"]),
+                            weight=weight,
+                        )
+            elif "dil_ntrack" == histname and "dil_nb" in pruned_ev.fields:
+                output[histname].fill(
+                    syst,
+                    ak.to_numpy(pruned_ev.dil_nb),
+                    ak.to_numpy(pruned_ev.dil_ntrack),
+                    weight=weight,
+                )
+            elif "hadW_top_mjjb" == histname and "top_valid" in pruned_ev.fields:
+                valid = ak.to_numpy(pruned_ev.top_valid)
+                output[histname].fill(
+                    syst[valid],
+                    ak.to_numpy(pruned_ev.lepb_truth_mt)[valid],
+                    ak.to_numpy(pruned_ev.nbjet)[valid],
+                    ak.to_numpy(pruned_ev.n_track)[valid],
+                    ak.to_numpy(pruned_ev.top_mjjb)[valid],
+                    weight=weight[valid],
+                )
+            elif "hadW_lep_charge" == histname and "lep_charge" in pruned_ev.fields:
+                valid = ak.to_numpy(pruned_ev.hadW_valid)
+                output[histname].fill(
+                    syst[valid],
+                    ak.to_numpy(pruned_ev.lep_charge)[valid],
+                    ak.to_numpy(pruned_ev.nbjet)[valid],
+                    ak.to_numpy(pruned_ev.n_track)[valid],
+                    ak.to_numpy(pruned_ev.hadW_mass)[valid],
+                    weight=weight[valid],
+                )
+            elif (
+                histname in ("hadW_lep_mT", "hadW_lep_met", "hadW_lep_mlb")
+                and "lep_charge" in pruned_ev.fields
+            ):
+                valid = ak.to_numpy(pruned_ev.hadW_valid)
+                output[histname].fill(
+                    syst[valid],
+                    ak.to_numpy(pruned_ev[histname.replace("hadW_", "")])[valid],
+                    ak.to_numpy(pruned_ev.lep_charge)[valid],
+                    ak.to_numpy(pruned_ev.nbjet)[valid],
+                    ak.to_numpy(pruned_ev.n_track)[valid],
+                    ak.to_numpy(pruned_ev.hadW_mass)[valid],
+                    weight=weight[valid],
+                )
+            elif "upart_eff" == histname and "upeff_flav" in pruned_ev.fields:
+                h.fill(
+                    flatten(pruned_ev.upeff_flav),
+                    flatten(pruned_ev.upeff_pt),
+                    np.abs(flatten(pruned_ev.upeff_eta)),
+                    flatten(pruned_ev.upeff_tag),
+                    weight=flatten(ak.broadcast_arrays(weight, pruned_ev.upeff_pt)[0]),
                 )
             # Jet kinematics & deltaR between jet and lepton
             elif (

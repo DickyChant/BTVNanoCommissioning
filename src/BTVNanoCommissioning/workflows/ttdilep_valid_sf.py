@@ -1,7 +1,9 @@
+import os
 import awkward as ak, numpy as np
 from coffea import processor
 
 # functions to load SFs, corrections
+from BTVNanoCommissioning.utils.upart_sf import add_upart_weights
 from BTVNanoCommissioning.utils.correction import (
     load_lumi,
     load_SF,
@@ -21,6 +23,8 @@ from BTVNanoCommissioning.utils.histogramming.histogrammer import (
 )
 from BTVNanoCommissioning.utils.array_writer import array_writer
 from BTVNanoCommissioning.utils.selection import (
+    btag_mu_idiso,
+    btag_wp,
     HLT_helper,
     jet_id,
     mu_promptmvaid,
@@ -52,7 +56,12 @@ class NanoProcessor(processor.ProcessorABC):
         self.chunksize = chunksize
         self.selMod = selectionModifier
         ## Load corrections
-        self.SF_map = load_SF(self._year, self._campaign, self.selMod)
+        # the hadW mode uses the tt_dilep lepton IDs, so it takes the tt_dilep scale factors
+        self.SF_map = load_SF(
+            self._year,
+            self._campaign,
+            "tt_dilep" if self.selMod == "tt_dilep_hadw" else self.selMod,
+        )
 
     @property
     def accumulator(self):
@@ -78,7 +87,12 @@ class NanoProcessor(processor.ProcessorABC):
             output = histogrammer(
                 events.Jet.fields,
                 obj_list=["mu", "ele", "jet0", "jet1"],
-                hist_collections=["common", "fourvec", "ttdilep"],
+                hist_collections=(
+                    ["ttdilep"]
+                    if os.environ.get("HADW_STUDY_HISTS")  # study histograms only (systematics runs)
+                    else ["common", "fourvec", "ttdilep"]
+                ),
+                hadw=self.selMod == "tt_dilep_hadw",
             )
 
         if shift_name is None:
@@ -121,13 +135,19 @@ class NanoProcessor(processor.ProcessorABC):
             "Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
             "Mu8_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
         ]
+        hadw = self.selMod == "tt_dilep_hadw"
+        if hadw:
+            # run on the Muon primary dataset like the semileptonic study
+            triggers = ["IsoMu24"]
         req_trig = HLT_helper(events, triggers)
 
         ## Muon cuts
         # muon twiki: https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonIdRun2
         if self._campaign in ["Summer24", "Winter25", "Prompt25"]:  # NanoAODv15
             events.Muon = events.Muon[
-                (events.Muon.pt > 25) & mu_promptmvaid(events, self._campaign)
+                (events.Muon.pt > (30 if hadw else 25))
+                # hadronic-W study: the muon ID and isolation of the semileptonic selection
+                & (btag_mu_idiso(events, self._campaign) if hadw else mu_promptmvaid(events, self._campaign))
             ]
         else:
             events.Muon = events.Muon[
@@ -215,6 +235,48 @@ class NanoProcessor(processor.ProcessorABC):
         pruned_ev["dr_mujet1"] = pruned_ev.Muon.delta_r(pruned_ev.Jet[:, 1])
         pruned_ev["njet"] = ak.count(event_jet[event_level].pt, axis=1)
 
+        if hadw:
+            # b candidates: the two jets with the highest UParT score
+            jets = event_jet[event_level]
+            jets = jets[ak.argsort(jets.btagUParTAK4B, axis=1, ascending=False)]
+            try:
+                bm = btag_wp(jets, self._year, self._campaign, "UParTAK4", "b", "M")
+            except Exception:
+                bm = jets.btagUParTAK4B > 0.1272
+            if "hadronFlavour" in jets.fields:
+                # per-jet inputs of the UParT SFs and of the tagging-efficiency histogram (MC)
+                pruned_ev["upeff_pt"] = jets.pt
+                pruned_ev["upeff_eta"] = jets.eta
+                pruned_ev["upeff_flav"] = ak.values_astype(jets.hadronFlavour, np.int64)
+                pruned_ev["upeff_tag"] = ak.values_astype(ak.fill_none(bm, False), np.int64)
+            pruned_ev["dil_nb"] = ak.values_astype(
+                ak.sum(ak.fill_none(bm[:, :2], False), axis=1), np.int64
+            )
+            j1, j2 = jets[:, 0], jets[:, 1]
+            mu, el = pruned_ev.SelMuon, pruned_ev.SelElectron
+            # pairing A = (mu, j1)(e, j2), B = (mu, j2)(e, j1)
+            mA_mu, mA_e = (mu + j1).mass, (el + j2).mass
+            mB_mu, mB_e = (mu + j2).mass, (el + j1).mass
+            use_a = {
+                "dr": (mu.delta_r(j1) + el.delta_r(j2)) < (mu.delta_r(j2) + el.delta_r(j1)),
+                "mm": np.maximum(mA_mu, mA_e) < np.maximum(mB_mu, mB_e),
+            }
+            for tag, ua in use_a.items():
+                pruned_ev[f"dil_mlb_mu_{tag}"] = ak.where(ua, mA_mu, mB_mu)
+                pruned_ev[f"dil_mlb_e_{tag}"] = ak.where(ua, mA_e, mB_e)
+                if "partonFlavour" in jets.fields:
+                    # the b of a l+ is a b quark (partonFlavour +5), of a l- a bbar
+                    pf_mu = ak.where(ua, j1.partonFlavour, j2.partonFlavour)
+                    pf_e = ak.where(ua, j2.partonFlavour, j1.partonFlavour)
+                    right = (pf_mu == 5 * mu.charge) & (pf_e == 5 * el.charge)
+                    swapped = (pf_mu == 5 * el.charge) & (pf_e == 5 * mu.charge)
+                    t = ak.where(right, 1, ak.where(swapped, 0, 2))
+                else:
+                    t = ak.full_like(mu.pt, 2)
+                pruned_ev[f"dil_truth_{tag}"] = ak.values_astype(t, np.int64)
+            chg = lambda j: j.nConstituents - j.neMultiplicity  # noqa: E731
+            pruned_ev["dil_ntrack"] = (pruned_ev.PV.ndof + 3.0) / 2.0 - chg(j1) - chg(j2) - 2.0
+
         # Find the PFCands associate with selected jets. Search from jetindex->JetPFCands->PFCand
         if "PFCands" in events.fields:
             pruned_ev.PFCands = PFCand_link(events, event_level, jetindx)
@@ -231,6 +293,10 @@ class NanoProcessor(processor.ProcessorABC):
             ttbar_reweights=getattr(self, "ttbar_reweights", "none"),
             campaign=self._campaign,
         )
+        # UParT b-tag SFs, method 1a over all selected jets (N_b of the two highest-score
+        # jets is min(number of tagged jets, 2), a function of the full tag configuration)
+        if hadw:
+            add_upart_weights(weights, pruned_ev, self._campaign, "dilep", self.isSyst)
         # Configure systematics
         if shift_name is None:
             systematics = ["nominal"] + list(weights.variations)
