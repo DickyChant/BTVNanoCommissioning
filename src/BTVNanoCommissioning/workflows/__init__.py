@@ -84,6 +84,12 @@ workflows["ttsemilep_e_jpsi"] = partial(TTsemilepValidSFProcessor, selectionModi
 from BTVNanoCommissioning.workflows.hadw_e_jpsi import NanoProcessor as HadWEJpsiProcessor  # noqa: E402
 
 workflows["hadw_e_jpsi"] = HadWEJpsiProcessor
+# ttbar + J/psi -> mu mu: the hadronic-W study selections plus one soft-muon pair near the J/psi mass (utils/jpsi.py)
+workflows["ttdilep_jpsi"] = partial(TTdilepValidSFProcessor, selectionModifier="tt_dilep_jpsi")
+workflows["ttsemilep_jpsi"] = partial(TTsemilepValidSFProcessor, selectionModifier="tt_semilep_jpsi")
+from BTVNanoCommissioning.workflows.hadw_jpsi import NanoProcessor as HadWJpsiProcessor  # noqa: E402
+
+workflows["hadw_jpsi"] = HadWJpsiProcessor
 workflows["ttsemilep_sf"] = partial(
     TTsemilepValidSFProcessor, selectionModifier="tt_semilep"
 )

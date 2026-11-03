@@ -4,6 +4,7 @@ from coffea import processor
 
 # functions to load SFs, corrections
 from BTVNanoCommissioning.utils.upart_sf import add_upart_weights
+from BTVNanoCommissioning.utils import jpsi as JPSI
 from BTVNanoCommissioning.utils.correction import (
     load_lumi,
     load_SF,
@@ -56,11 +57,11 @@ class NanoProcessor(processor.ProcessorABC):
         self.chunksize = chunksize
         self.selMod = selectionModifier
         ## Load corrections
-        # the hadW mode uses the tt_dilep lepton IDs, so it takes the tt_dilep scale factors
+        # the hadW (and hadW + J/psi) mode uses the tt_dilep lepton IDs, so it takes the tt_dilep scale factors
         self.SF_map = load_SF(
             self._year,
             self._campaign,
-            "tt_dilep" if self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e") else self.selMod,
+            "tt_dilep" if self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e", "tt_dilep_jpsi") else self.selMod,
         )
 
     @property
@@ -91,8 +92,9 @@ class NanoProcessor(processor.ProcessorABC):
                     ["ttdilep"]
                     if os.environ.get("HADW_STUDY_HISTS")  # study histograms only (systematics runs)
                     else ["common", "fourvec", "ttdilep"]
-                ),
-                hadw=self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e"),
+                )
+                + (["ttjpsi"] if self.selMod == "tt_dilep_jpsi" else []),
+                hadw=self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e", "tt_dilep_jpsi"),
                 elec=self.selMod == "tt_dilep_hadw_e",
             )
 
@@ -136,9 +138,10 @@ class NanoProcessor(processor.ProcessorABC):
             "Mu12_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
             "Mu8_TrkIsoVVL_Ele23_CaloIdL_TrackIdL_IsoVL_DZ",
         ]
-        hadw = self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e")
+        hadw = self.selMod in ("tt_dilep_hadw", "tt_dilep_hadw_e", "tt_dilep_jpsi")
         # electron mirror: the same e mu selection triggered by the single electron (EGamma PD)
         elec = self.selMod == "tt_dilep_hadw_e"
+        jpsi_mode = self.selMod == "tt_dilep_jpsi"
         if hadw:
             # run on the Muon primary dataset like the semileptonic study
             triggers = ["Ele30_WPTight_Gsf"] if elec else ["IsoMu24"]
@@ -152,15 +155,19 @@ class NanoProcessor(processor.ProcessorABC):
         ## Muon cuts
         # muon twiki: https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonIdRun2
         if self._campaign in ["Summer24", "Winter25", "Prompt25"]:  # NanoAODv15
-            events.Muon = events.Muon[
-                (events.Muon.pt > (30 if hadw else 25))
+            mu_sel = (events.Muon.pt > (30 if hadw else 25)) & (
                 # hadronic-W study: the muon ID and isolation of the semileptonic selection
-                & (btag_mu_idiso(events, self._campaign) if hadw else mu_promptmvaid(events, self._campaign))
-            ]
+                btag_mu_idiso(events, self._campaign) if hadw else mu_promptmvaid(events, self._campaign)
+            )
         else:
-            events.Muon = events.Muon[
-                (events.Muon.pt > 25) & mu_idiso(events, self._campaign)
-            ]
+            mu_sel = (events.Muon.pt > 25) & mu_idiso(events, self._campaign)
+        # J/psi -> mu mu (tt_dilep_jpsi): one dimuon from the loose-ID muons (no isolation) that are not ttbar-muon candidates
+        # (utils/jpsi.py), built before the muon collection is reduced to the selected muon. The jets are
+        # cleaned against the selected muon and electron only, so a b jet containing the J/psi stays.
+        if jpsi_mode:
+            jinfo, _ = JPSI.find_jpsi(events, JPSI.jpsi_muon_mask(events, mu_sel))
+            jinfo["truth"] = JPSI.jpsi_truth(events, jinfo)
+        events.Muon = events.Muon[mu_sel]
         events.Muon = ak.pad_none(events.Muon, 1, axis=1)
         req_muon = ak.count(events.Muon.pt, axis=1) == 1
 
@@ -296,6 +303,24 @@ class NanoProcessor(processor.ProcessorABC):
                     pruned_ev[f"dgd_bpt_{lep}"] = ak.where(ua, ja.pt, jb.pt)
                 pruned_ev["dgd_ntpv"] = (pruned_ev.PV.ndof + 3.0) / 2.0
                 pruned_ev["dgd_ntj"] = chg(j1) + chg(j2)
+
+            if jpsi_mode:
+                # b candidates: the two highest-score jets; each lepton's b from the minimax pairing.
+                # b jets for the J/psi matching: the b candidates and every UParT-M tagged selected jet
+                assoc = JPSI.jet_association(
+                    jinfo["p4"][ak.to_numpy(event_level)], jets, jets[:, :2], jets[ak.fill_none(bm, False)]
+                )
+                ua = use_a["mm"]
+                JPSI.store(
+                    pruned_ev,
+                    jinfo,
+                    event_level,
+                    assoc,
+                    {"mu": (mu, ak.where(ua, 0, 1)), "e": (el, ak.where(ua, 1, 0))},
+                    pruned_ev.dil_nb,
+                    pruned_ev.dil_ntrack,
+                    {"mlb_mu": pruned_ev.dil_mlb_mu_mm, "mlb_e": pruned_ev.dil_mlb_e_mm},
+                )
 
         # Find the PFCands associate with selected jets. Search from jetindex->JetPFCands->PFCand
         if "PFCands" in events.fields:

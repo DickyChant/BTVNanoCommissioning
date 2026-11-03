@@ -97,7 +97,7 @@ class NanoProcessor(processor.ProcessorABC):
                     if os.environ.get("HADW_STUDY_HISTS")  # study histograms only (systematics runs)
                     else ["common", "fourvec", "ttsemilep"]
                 )
-                + (["ttjpsi"] if self.ttaddsel == "tt_semilep_e_jpsi" else []),
+                + (["ttjpsi"] if self.ttaddsel in ("tt_semilep_jpsi", "tt_semilep_e_jpsi") else []),
                 c_ttsemilep=self.ttaddsel == "c_tt_semilep",
                 elec=self.ttaddsel in ("tt_semilep_e", "tt_semilep_e_jpsi"),
             )
@@ -156,10 +156,10 @@ class NanoProcessor(processor.ProcessorABC):
         # event_muon = ak.pad_none(events.Muon, 1, axis=1)
         req_muon = ak.count(event_muon.pt, axis=1) == 1
 
-        # J/psi -> mu mu (tt_semilep_e_jpsi): one dimuon from the loose-ID muons (no isolation) that are not
-        # tight isolated pT > 30 GeV muons (utils/jpsi.py). Its two muons are exempt from the jet cleaning below,
-        # which otherwise removes every jet within 0.4 of any muon, i.e. a jet that contains the J/psi.
-        jpsi_mode = self.ttaddsel == "tt_semilep_e_jpsi"
+        # J/psi -> mu mu (tt_semilep_jpsi, tt_semilep_e_jpsi): one dimuon from the loose-ID muons (no isolation) that
+        # are not tight isolated pT > 30 GeV muons (utils/jpsi.py). Its two muons are exempt from the jet cleaning
+        # below, which otherwise removes every jet within 0.4 of any muon, i.e. a jet that contains the J/psi.
+        jpsi_mode = self.ttaddsel in ("tt_semilep_jpsi", "tt_semilep_e_jpsi")
         clean_mu = events.Muon
         if jpsi_mode:
             jinfo, jpair = JPSI.find_jpsi(
