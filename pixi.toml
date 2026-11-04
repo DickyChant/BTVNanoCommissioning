@@ -1,0 +1,46 @@
+# Pixi environment of the batch jobs (scripts/ttJ/run_job.sh installs it from pixi.lock in each job; pixi from
+# /cvmfs/cms-griddata.cern.ch/cat/sw/pixi). The versions are those of the conda environment that produced the ttJ
+# results so far (coffea 0.7.22, correctionlib 2.6.1), each from the same source (conda-forge or PyPI wheel); setup.cfg
+# and test_env.yml name newer coffea / correctionlib.
+# The package itself is not installed: the jobs put <checkout>/src on PYTHONPATH (src/BTVNanoCommissioning/version.py
+# is written by setuptools_scm, e.g. by `pip install -e .` once in the checkout).
+[workspace]
+name = "BTVNanoCommissioning"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.10.*"
+xrootd = "5.5.1.*"  # python bindings for uproot's XRootD source
+ca-policy-lcg = "*"
+
+[pypi-dependencies]
+coffea = "==0.7.22"
+awkward = "==1.10.5"
+uproot = "==4.3.7"
+uproot3 = "==3.14.4"
+numpy = "==1.23.5"
+numba = "==0.60.0"
+llvmlite = "==0.43.0"
+scipy = "==1.14.0"
+correctionlib = "==2.6.1"
+hist = "==2.7.3"
+boost-histogram = "==1.4.1"
+vector = "==1.4.1"
+uhi = "==0.4.0"  # histogram protocols of hist / boost-histogram
+pyarrow = "==10.0.1"
+pandas = "==2.2.2"
+onnxruntime = "==1.20.1"
+matplotlib = "==3.9.1"
+mplhep = "==0.3.50"
+psutil = "==6.0.0"
+cloudpickle = "==3.0.0"
+lz4 = "==4.3.3"
+zstandard = "==0.23.0"
+fsspec = "==2024.6.1"
+pyyaml = "==6.0.1"
+cachetools = "==5.4.0"
+tqdm = "==4.66.4"
+p-tqdm = "==1.4.2"
+alive-progress = "*"
+setuptools = "==70.1.1"
