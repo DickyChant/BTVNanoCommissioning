@@ -54,6 +54,8 @@ def find_jpsi(events, cand):
     rap = 0.5 * np.log((energy + pz) / np.maximum(energy - pz, 1e-9))
     sip = np.maximum(ak.firsts(m1.sip3d[best]), ak.firsts(m2.sip3d[best]))
     nmed = ak.values_astype(m1.mediumId, np.int64) + ak.values_astype(m2.mediumId, np.int64)
+    lead = ak.firsts(m1[best]).pt >= ak.firsts(m2[best]).pt
+    mu_a, mu_b = ak.firsts(m1[best]), ak.firsts(m2[best])
     vtx = dimuon_vertex(ak.firsts(m1[best]), ak.firsts(m2[best]), jp, ak.to_numpy(valid))
     info = {
         "valid": valid,
@@ -64,6 +66,15 @@ def find_jpsi(events, cand):
         "absy": ak.fill_none(abs(rap), -1.0),
         "sip": ak.fill_none(sip, -1.0),
         "nmed": ak.fill_none(ak.firsts(nmed[best]), 0),
+        # the two muons, leading and subleading in pT (for the per-candidate table)
+        "pt1": ak.fill_none(ak.where(lead, mu_a.pt, mu_b.pt), -1.0),
+        "eta1": ak.fill_none(ak.where(lead, mu_a.eta, mu_b.eta), -9.0),
+        "pt2": ak.fill_none(ak.where(lead, mu_b.pt, mu_a.pt), -1.0),
+        "eta2": ak.fill_none(ak.where(lead, mu_b.eta, mu_a.eta), -9.0),
+        # isolation of the two muons (b decays leave other tracks around the J/psi): PF isolation in 0.3, mini-isolation,
+        # and the relative isolation with respect to the matched jet
+        **{f"{k}{i}": ak.fill_none(ak.where(lead if i == 1 else ~lead, mu_a[f], mu_b[f]), -1.0)
+           for i in (1, 2) for k, f in (("iso", "pfRelIso03_all"), ("miniiso", "miniPFRelIso_all"), ("jetiso", "jetRelIso"))},
         "i1": i1,
         "i2": i2,
         **vtx,
@@ -213,13 +224,38 @@ def jet_association(jp, jets, bcands, btagged):
     }
 
 
+def near_objects(ev, jp):
+    """the secondary vertex (SV collection) and the jet (any jet with pT > 15 GeV, |eta| < 2.5, no ID or cleaning)
+    closest to the J/psi direction: a b-hadron decay leaves a displaced vertex or a soft jet around the J/psi.
+    sv_*: Delta R, number of tracks, flight-distance significance, mass; sj_*: Delta R, pT, UParT b score, muon energy
+    fraction (a jet made of the J/psi muons alone has muEF near 1). -1 where there is none."""
+    out = {}
+    sv = ev.SV  # no four-vector behaviour in coffea 0.7: Delta R by hand
+    dphi = (sv.phi - jp.phi + np.pi) % (2 * np.pi) - np.pi
+    dr = ak.fill_none(np.sqrt((sv.eta - jp.eta) ** 2 + dphi**2), 99.0)
+    i = ak.argmin(dr, axis=1, keepdims=True)
+    near = ak.firsts(sv[i])
+    out["sv_dr"] = ak.fill_none(ak.firsts(dr[i]), -1.0)
+    for k, f in (("sv_ntrk", "ntracks"), ("sv_dlensig", "dlenSig"), ("sv_mass", "mass")):
+        out[k] = ak.fill_none(near[f], -1.0)
+    jets = ev.Jet[(ev.Jet.pt > 15) & (abs(ev.Jet.eta) < 2.5)]
+    dr = ak.fill_none(jets.delta_r(jp), 99.0)
+    i = ak.argmin(dr, axis=1, keepdims=True)
+    near = ak.firsts(jets[i])
+    out["sj_dr"] = ak.fill_none(ak.firsts(dr[i]), -1.0)
+    btag = "btagUParTAK4B" if "btagUParTAK4B" in ev.Jet.fields else "btagDeepFlavB"
+    for k, f in (("sj_pt", "pt"), ("sj_btag", btag), ("sj_muef", "muEF")):
+        out[k] = ak.fill_none(near[f], -1.0)
+    return out
+
+
 def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
     """Write the J/psi fields of the selected events (`sel`: the event-level mask that made pruned_ev).
     `leptons`: {name: (lepton, index of its b candidate among bcands)}; `ttkin`: {name: ttbar observable of the
     selected events, <= 0 where undefined}, stored as jpsi_tt_<name> to show that the J/psi events are ttbar."""
     sel = ak.to_numpy(sel)
     pruned_ev["jpsi_valid"] = info["valid"][sel]
-    for k in ("os", "mass", "pt", "absy", "sip", "nmed"):
+    for k in ("os", "mass", "pt", "absy", "sip", "nmed", "pt1", "eta1", "pt2", "eta2", "iso1", "iso2", "miniiso1", "miniiso2", "jetiso1", "jetiso2"):
         pruned_ev[f"jpsi_{k}"] = info[k][sel]
     pruned_ev["jpsi_mreg"] = mass_region(info["mass"][sel])
     for k in ("lxy", "lxyerr", "z0", "vchi2"):
@@ -229,6 +265,8 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
     for k in ("cat", "drj", "z"):
         pruned_ev[f"jpsi_{k}"] = assoc[k]
     jp = info["p4"][sel]
+    for k, v in near_objects(pruned_ev, jp).items():
+        pruned_ev[f"jpsi_{k}"] = v
     for name, (lep, ib_lep) in leptons.items():
         pruned_ev[f"jpsi_mlj_{name}"] = ak.fill_none((lep + jp).mass, -1.0)
         # reco side: 1 the J/psi is in the b candidate paired with this lepton, 0 in the other one, 2 in no b candidate
@@ -244,3 +282,45 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
     pruned_ev["jpsi_ntrack"] = ntrack
     for k, v in ttkin.items():
         pruned_ev[f"jpsi_tt_{k}"] = ak.fill_none(v, -1.0)
+
+
+# one row per J/psi candidate (output "jpsi_cands"), for unbinned fits of the mass and l_xy with the per-candidate
+# l_xy error, in bins of pT: all selected ttbar events with a dimuon in 2.0-4.5 GeV, opposite and same sign
+CAND_FIELDS = ("os", "mass", "pt", "absy", "sip", "nmed", "pt1", "eta1", "pt2", "eta2", "iso1", "iso2", "miniiso1", "miniiso2",
+               "jetiso1", "jetiso2", "mreg", "lxy", "lxyerr", "z0", "vchi2", "life", "truth", "cat", "drj", "z", "nb", "ntrack",
+               "sv_dr", "sv_ntrk", "sv_dlensig", "sv_mass", "sj_dr", "sj_pt", "sj_btag", "sj_muef")
+
+
+def candidate_table(pruned_ev, weight=None):
+    """{column: column_accumulator} of the J/psi candidates of the selected events: CAND_FIELDS, the ttbar observables
+    (jpsi_tt_*, jpsi_mlj_*), the ttbar lepton(s) (pT, eta, isolation, m_T) and MET, run / lumi / event, the number of
+    good primary vertices and the event weight (1 for data)"""
+    from coffea.processor import column_accumulator
+
+    ok = ak.to_numpy(ak.fill_none(pruned_ev.jpsi_valid, False))
+    cols = {"run": pruned_ev.run, "lumi": pruned_ev.luminosityBlock, "event": pruned_ev.event, "npv": pruned_ev.PV.npvsGood}
+    cols.update({k: pruned_ev[f"jpsi_{k}"] for k in CAND_FIELDS})
+    cols.update({f: pruned_ev[f] for f in pruned_ev.fields if f.startswith(("jpsi_tt_", "jpsi_mlj_", "jpsi_rside_"))})
+    # the ttbar lepton(s) and MET, to tell ttbar from multijet events (isolation, m_T)
+    met = pruned_ev.MET
+    cols["met"] = met.pt
+    for f, nm, iso in (("SelMuon", "mu", "pfRelIso04_all"), ("SelElectron", "e", "pfRelIso03_all")):
+        if f in pruned_ev.fields:
+            lep = pruned_ev[f]
+            cols.update({f"{nm}_pt": lep.pt, f"{nm}_eta": lep.eta, f"{nm}_iso": lep[iso],
+                         f"{nm}_mT": np.sqrt(2.0 * lep.pt * met.pt * (1.0 - np.cos(lep.phi - met.phi)))})
+    cols["weight"] = np.ones(len(ok)) if weight is None else weight
+    out = {}
+    for k, v in cols.items():
+        a = ak.to_numpy(ak.fill_none(v, -99)) if not isinstance(v, np.ndarray) else v
+        out[k.replace("jpsi_", "", 1)] = column_accumulator(np.asarray(a)[ok])
+    return out
+
+
+def npv_hist(pruned_ev, weight=None):
+    """good primary vertices of all selected ttbar events (pileup of the sample, for the pileup J/psi)"""
+    import hist as Hist
+
+    h = Hist.Hist(Hist.axis.Integer(0, 150, name="npv", label="good primary vertices"), storage=Hist.storage.Weight())
+    h.fill(npv=ak.to_numpy(pruned_ev.PV.npvsGood), weight=np.ones(len(pruned_ev)) if weight is None else weight)
+    return h

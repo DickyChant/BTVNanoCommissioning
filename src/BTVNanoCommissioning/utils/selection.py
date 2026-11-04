@@ -1,3 +1,4 @@
+from BTVNanoCommissioning.helpers.func import NANOV15, V15_RENANO
 import awkward as ak
 import numpy as np
 from BTVNanoCommissioning.helpers.func import campaign_map
@@ -53,6 +54,7 @@ def jet_id(events, campaign, max_eta=2.5, min_pt=20):
         "Summer24",
         "Winter25",
         "Prompt25",
+        *NANOV15,
     ]:
         # NanoV13+ / NanoV15 reprocessing (no jetId branch, compute from components)
         barrel = (
@@ -185,7 +187,7 @@ def jet_id(events, campaign, max_eta=2.5, min_pt=20):
 def ele_cuttightid(events, campaign):
     ele_etaSC = (
         events.Electron.eta + events.Electron.deltaEtaSC
-        if campaign not in ["Summer24", "Winter25", "Prompt25"]
+        if campaign not in NANOV15
         else events.Electron.superclusterEta
     )
     elemask = (
@@ -197,7 +199,7 @@ def ele_cuttightid(events, campaign):
 def ele_mvatightid(events, campaign):
     ele_etaSC = (
         events.Electron.eta + events.Electron.deltaEtaSC
-        if campaign not in ["Summer24", "Winter25", "Prompt25"]
+        if campaign not in NANOV15
         else events.Electron.superclusterEta
     )
     elemask = (
@@ -210,14 +212,14 @@ def ele_promptmvaid(events, campaign):
     # https://indico.cern.ch/event/1575017/contributions/6635248/attachments/3115862/5524310/EGammaAug08.pdf
     ele_etaSC = (
         events.Electron.eta + events.Electron.deltaEtaSC
-        if campaign not in ["Summer24", "Winter25", "Prompt25"]
+        if campaign not in NANOV15
         else events.Electron.superclusterEta
     )
     elemask = (
         (abs(ele_etaSC) < 1.4442) | ((abs(ele_etaSC) > 1.566) & (abs(ele_etaSC) < 2.5))
     ) & (
         events.Electron.promptMVA >= 0.9
-        if campaign in ["Summer24", "Winter25", "Prompt25"]
+        if campaign in NANOV15
         else 0.3
     )
     return elemask
@@ -937,3 +939,12 @@ met_filters = {
         ],
     },
 }
+
+
+# NanoAODv15 re-NANO of 2022/2023 and the 2026 prompt data: MET filters of the original / the 2025 campaign
+for _c in V15_RENANO:
+    met_filters[_c + "v15"] = met_filters[_c] if _c in met_filters else met_filters["Summer22"]
+met_filters["Prompt26"] = met_filters["Prompt25"]
+# 2026: the 2025 UParT working points (no 2026 BTV release yet); 2022/2023 have no UParT working points: the workflows
+# fall back to the 2024 medium threshold
+btag_wp_dict["2026_Prompt26"] = btag_wp_dict["2025_Prompt25"]

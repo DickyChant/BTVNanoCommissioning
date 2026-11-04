@@ -1,6 +1,7 @@
 #!/bin/bash
 # One batch job of the ttJ workflow: runner.py over one sub-json (a few files of one data set).
-# usage: run_job.sh <job name> [isSyst]      (the sub-json is $TTJ_SUBJSON/<job name>.json)
+# usage: run_job.sh <job name> [isSyst] [campaign] [year]      (the sub-json is $TTJ_SUBJSON/<job name>.json;
+#        campaign / year default to $TTJ_CAMPAIGN / $TTJ_YEAR, then Summer24 / 2024)
 # Environment (set in the submit file, see submit.jdl.template):
 #   TTJ_CODE     checkout of the ttJ branch readable from the batch nodes (e.g. on EOS); jobs read the code at run time,
 #                so do not edit it while jobs run
@@ -9,9 +10,9 @@
 #   TTJ_CONDA    conda environment with coffea 0.7 (activated with its etc/profile.d/conda.sh)
 #   X509_USER_PROXY  grid proxy readable from the batch node (for xrootd)
 #   TTJ_WF       workflow (default ttJ; ttJ_bph for BPHNano of the low-mass double-muon parking)
-NAME=$1; SYST=${2:-False}; WF=${TTJ_WF:-ttJ}
+NAME=$1; SYST=${2:-False}; WF=${TTJ_WF:-ttJ}; CAMPAIGN=${3:-${TTJ_CAMPAIGN:-Summer24}}; YEAR=${4:-${TTJ_YEAR:-2024}}
 SUB=$TTJ_SUBJSON/${NAME}.json
-echo "[job] host=$(hostname) wf=$WF name=$NAME isSyst=$SYST start=$(date)"
+echo "[job] host=$(hostname) wf=$WF name=$NAME isSyst=$SYST campaign=$CAMPAIGN year=$YEAR start=$(date)"
 # spread the start-up reads of a shared conda environment (hundreds of jobs start at once)
 sleep $((RANDOM % 600))
 source "$(dirname "$(dirname "$TTJ_CONDA")")/etc/profile.d/conda.sh" && conda activate "$TTJ_CONDA"
@@ -27,10 +28,13 @@ export HOME=$PWD
 export HADW_STUDY_HISTS=1  # fill only the study histograms
 TMPJ=$PWD/${NAME}_global.json
 sed 's#root://xrootd-cms.infn.it/#root://cms-xrd-global.cern.ch/#g' "$SUB" > "$TMPJ"
+FNALJ=$PWD/${NAME}_fnal.json
+sed 's#root://xrootd-cms.infn.it/#root://cmsxrootd.fnal.gov/#g' "$SUB" > "$FNALJ"
 cd "$TTJ_CODE"
-# up to four attempts: the redirector of the sub-json first, then the global one
-for J in "$SUB" "$TMPJ" "$SUB" "$TMPJ"; do
-  python runner.py --wf $WF --json "$J" --campaign Summer24 --year 2024 --executor iterative \
+# up to four attempts: the redirector of the sub-json first, then the global one, then the FNAL one (the European and
+# global redirectors sometimes send a file to a server that fails with "Redirect limit has been reached")
+for J in "$SUB" "$TMPJ" "$FNALJ" "$SUB"; do
+  python runner.py --wf $WF --json "$J" --campaign $CAMPAIGN --year $YEAR --executor iterative \
     --chunk 40000 --skipbadfiles --isSyst $SYST --ttbar-reweights full -o ${NAME}.coffea --outputdir "$TTJ_OUT" 2> >(grep -v -i 'warn' >&2)
   rc=$?; echo "[job] runner exit=$rc json=$J $(date)"
   [ $rc -eq 0 ] && [ -f "$TTJ_OUT/${NAME}/${NAME}.coffea" ] && break

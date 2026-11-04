@@ -355,7 +355,7 @@ correction_config = {
     },
     "Prompt25": {
         "default": {
-            "DC": "Cert_Collisions2025_391658_398860_Golden.json",
+            "DC": "Cert_Collisions2025_391658_398903_Golden.json",
             "LUM": "puWeights2025.json.gz",
             # Year-dependent JES regrouped uncertainties use the MC JEC campaign year,
             # not the data year.  Summer24 JECs have "_2024_" in the correction names.
@@ -399,3 +399,34 @@ correction_config = {
         "default": {"DC": "$PROMPT_DATAMC"},
     },
 }
+
+# 2026 prompt data (NanoAODv15): first JEC / JER of 2026 (Summer24Prompt26, eras B, C = low pileup, D), the jet veto map
+# cloned from 2025; golden JSON of 2026-11
+correction_config["Prompt26"] = {
+    "default": {
+        "DC": "Cert_Collisions2026_401624_403937_golden.json",
+        "JES_MC_year": "2024",
+        "JME": {
+            "MC": "Summer24Prompt26_V1 Summer24Prompt26_RunBD_JRV1",
+            "Run2026A": "Summer24Prompt26_V1",
+            "Run2026B": "Summer24Prompt26_V1",
+            "Run2026C": "Summer24Prompt26_V1",
+            "Run2026D": "Summer24Prompt26_V1",
+        },
+        "jetveto": {"Summer24Prompt26_RunBCD_V1": "jetvetomap"},
+        "MUO": {
+            "mu_ID": "NUM_TightID_DEN_TrackerMuons",
+            "mu_Iso": "NUM_TightPFIso_DEN_TightID",
+        },
+        "muonSS": "",
+        "electronSS": [
+            "Scale",
+            "SmearAndSyst",
+        ],
+        # no 2026 MUO release yet: the 2025 muon scale & smearing
+        "cvmfs_override": {"muonSS": "Run3-25Prompt-Summer24-NanoAODv15", "MUO": "Run3-25Prompt-Summer24-NanoAODv15"},
+    },
+}
+# NanoAODv15 re-NANO of the 2022/2023 data: the corrections of the original campaigns, the v15 code paths (helpers/func.py)
+for _c in ("Summer22", "Summer22EE", "Summer23", "Summer23BPix"):
+    correction_config[_c + "v15"] = correction_config[_c]

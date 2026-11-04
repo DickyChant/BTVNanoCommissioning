@@ -25,6 +25,8 @@ def campaign_map():
         if "Run3" in subdirs[i]:
             if "25Prompt" in subdirs[i]:
                 dirnames["Prompt25"] = subdirs[i]
+            elif "-26Prompt-" in subdirs[i] and "Scouting" not in subdirs[i]:
+                dirnames["Prompt26"] = subdirs[i]
             else:
                 dirnames[subdirs[i].split("-")[2]] = subdirs[i]
         elif "Run2" in subdirs[i]:
@@ -34,7 +36,16 @@ def campaign_map():
             continue
         else:
             raise ValueError("Unknown campaign name")
+    # NanoAODv15 re-NANO of the 2022/2023 data: the corrections of the original campaign
+    for c in V15_RENANO:
+        if c in dirnames:
+            dirnames[c + "v15"] = dirnames[c]
     return dirnames
+
+
+# campaigns whose data are NanoAODv15 (field names and code paths of v15); "<campaign>v15" = the v15 re-NANO of 2022/2023
+V15_RENANO = ("Summer22", "Summer22EE", "Summer23", "Summer23BPix")
+NANOV15 = ("Summer24", "Winter25", "Prompt25", "Prompt26") + tuple(c + "v15" for c in V15_RENANO)
 
 
 def memory_usage_psutil():

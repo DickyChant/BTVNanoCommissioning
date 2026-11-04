@@ -14,7 +14,7 @@ and e mu selections of the hadronic-W study, plus one soft-muon pair per event (
 MC is normalised by cross section (pb) and compared with data per ttbar-selected event, so no luminosity enters.
   life      with the two-muon vertex (ttJ outputs): yields, mass spectra and ttbar kinematics per lifetime region (prompt
             |l_xy| < 0.06 mm, non-prompt l_xy > 0.1 mm, pileup-like |z0| >= 0.1 cm), and the sideband-subtracted l_xy shapes
--> results.json   usage: python3 build_ttJ.py <outdir> [<outdir> ...] <results.json>"""
+-> results.json   usage: [TTJ_YEARS=2022,2023] python3 build_ttJ.py <outdir> [<outdir> ...] <results.json>"""
 import glob
 import json
 import os
@@ -67,7 +67,10 @@ def chan_name(ds, ch):
     return {"dil": "emu"}.get(ch, ch)
 
 
-is_data = lambda ds: re.match(r"(Muon|EGamma)\dRun2024", ds) is not None  # noqa: E731
+is_data = lambda ds: re.match(r"(Single)?(Muon|EGamma)\d*Run20\d\d", ds) is not None  # noqa: E731
+# only these years (comma-separated, e.g. TTJ_YEARS=2022,2023), from the dataset names; all if unset
+YEARS = [y for y in os.environ.get("TTJ_YEARS", "").split(",") if y]
+in_years = lambda ds: not YEARS or any(f"Run{y}" in ds for y in YEARS)  # noqa: E731
 
 
 def nominal(h, flow_last=False):
@@ -92,6 +95,8 @@ for f in sorted(sum((glob.glob(f"{o}/*/*.coffea") for o in OUTDIRS), [])):
     od = os.path.dirname(os.path.dirname(f))
     files_per_dir[od] = files_per_dir.get(od, 0) + 1
     for ds, d in o.items():
+        if not in_years(ds):
+            continue
         sumw[ds] = sumw.get(ds, 0.0) + float(next(iter(d.values()))["sumw"])
         for chk, hd in d.items():
             ch = chan_name(ds, chk)
@@ -379,6 +384,23 @@ for ch in ("mujets", "ejets", "emu"):
                 a, a2 = s[CATS[cn], 1:, zs].sum(axis=(0, 1, 2)), s2[CATS[cn], 1:, zs].sum(axis=(0, 1, 2))
                 L[f"lxy_{cn}_{zn}"] = list(map(float, a))
                 L[f"lxy_{cn}_{zn}_err"] = list(map(float, np.sqrt(np.maximum(a2, 0))))
+                # raw OS counts of the signal window and of the two sidebands (for a likelihood fit of l_xy)
+                for rn, ri in (("win", [1]), ("sb", [0, 2])):
+                    r = v[ri][:, 0][:, CATS[cn]][:, :, :, 1:][:, :, :, :, zs]
+                    L[f"lxy_{cn}_{zn}_{rn}"] = list(map(float, r.sum(axis=(0, 1, 2, 3, 4))))
+            # |z0| of the J/psi line at the PV, sideband-subtracted, N_b >= 1
+            a, a2 = s[CATS[cn], 1:].sum(axis=(0, 1, 3)), s2[CATS[cn], 1:].sum(axis=(0, 1, 3))
+            L[f"z0_{cn}"], L[f"z0_{cn}_err"] = list(map(float, a)), list(map(float, np.sqrt(np.maximum(a2, 0))))
+        # J/psi pT per lifetime region (jpsi_pt@life: mreg, osss, cat, truth, life, pt, absy), OS, sideband-subtracted, N_b inclusive
+        if (ch, "jpsi_pt@life") in shapes:
+            v, w2 = total((ch, "jpsi_pt@life"), "data")
+            s, s2 = sbsub(v, w2, 0)
+            s, s2 = s[0].sum(axis=(1, 4)), s2[0].sum(axis=(1, 4))  # (cat, life, pt)
+            L["pt_edges"] = edges[(ch, "jpsi_pt")][-2] if (ch, "jpsi_pt") in edges else []
+            for cn in ("all", "notb", "inb"):
+                for ln, li in LIFE.items():
+                    a, a2 = s[CATS[cn], li].sum(axis=0), s2[CATS[cn], li].sum(axis=0)
+                    L[f"pt_{ln}_{cn}"], L[f"pt_{ln}_{cn}_err"] = list(map(float, a)), list(map(float, np.sqrt(np.maximum(a2, 0))))
         # ttbar kinematics of the prompt and non-prompt J/psi events (jpsi_tt_*@life: ..., nbj, life, x)
         for ln in ("prompt", "nonprompt"):
             li = LIFE[ln]

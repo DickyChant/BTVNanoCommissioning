@@ -487,6 +487,11 @@ class NanoProcessor(processor.ProcessorABC):
             output = histo_writter(
                 pruned_ev, output, weights, systematics, self.isSyst, self.SF_map
             )
+        # the J/psi candidates, one row each, and the pileup of all selected events
+        if jpsi_mode and shift_name is None:
+            w = None if isRealData else weights.weight()
+            output["jpsi_cands"] = JPSI.candidate_table(pruned_ev, w)
+            output["npv"] = JPSI.npv_hist(pruned_ev, w)
         # Output arrays
         if self.isArray:
             array_writer(

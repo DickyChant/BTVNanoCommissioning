@@ -1,3 +1,4 @@
+from BTVNanoCommissioning.helpers.func import NANOV15
 import os
 import awkward as ak, numpy as np
 from coffea import processor
@@ -154,7 +155,7 @@ class NanoProcessor(processor.ProcessorABC):
 
         ## Muon cuts
         # muon twiki: https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonIdRun2
-        if self._campaign in ["Summer24", "Winter25", "Prompt25"]:  # NanoAODv15
+        if self._campaign in NANOV15:  # NanoAODv15
             mu_sel = (events.Muon.pt > (30 if hadw else 25)) & (
                 # hadronic-W study: the muon ID and isolation of the semileptonic selection
                 btag_mu_idiso(events, self._campaign) if hadw else mu_promptmvaid(events, self._campaign)
@@ -173,7 +174,7 @@ class NanoProcessor(processor.ProcessorABC):
 
         ## Electron cuts
         # electron twiki: https://twiki.cern.ch/twiki/bin/viewauth/CMS/CutBasedElectronIdentificationRun2
-        if self._campaign in ["Summer24", "Winter25", "Prompt25"]:  # NanoAODv15
+        if self._campaign in NANOV15:  # NanoAODv15
             events.Electron = events.Electron[
                 (events.Electron.pt > (35 if elec else 25))  # 5 GeV above the Ele30 threshold
                 & ele_promptmvaid(events, self._campaign)
@@ -353,6 +354,11 @@ class NanoProcessor(processor.ProcessorABC):
             output = histo_writer(
                 pruned_ev, output, weights, systematics, self.isSyst, self.SF_map
             )
+        # the J/psi candidates, one row each, and the pileup of all selected events
+        if jpsi_mode and shift_name is None:
+            w = None if isRealData else weights.weight()
+            output["jpsi_cands"] = JPSI.candidate_table(pruned_ev, w)
+            output["npv"] = JPSI.npv_hist(pruned_ev, w)
         # Output arrays
         if self.isArray:
             array_writer(
