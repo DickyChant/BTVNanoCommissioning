@@ -265,6 +265,9 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
     for k in ("cat", "drj", "z"):
         pruned_ev[f"jpsi_{k}"] = assoc[k]
     jp = info["p4"][sel]
+    # the J/psi direction, for its pT balance against the ttbar system
+    pruned_ev["jpsi_eta"] = ak.fill_none(jp.eta, -99.0)
+    pruned_ev["jpsi_phi"] = ak.fill_none(jp.phi, -99.0)
     for k, v in near_objects(pruned_ev, jp).items():
         pruned_ev[f"jpsi_{k}"] = v
     for name, (lep, ib_lep) in leptons.items():
@@ -288,13 +291,18 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
 # l_xy error, in bins of pT: all selected ttbar events with a dimuon in 2.0-4.5 GeV, opposite and same sign
 CAND_FIELDS = ("os", "mass", "pt", "absy", "sip", "nmed", "pt1", "eta1", "pt2", "eta2", "iso1", "iso2", "miniiso1", "miniiso2",
                "jetiso1", "jetiso2", "mreg", "lxy", "lxyerr", "z0", "vchi2", "life", "truth", "cat", "drj", "z", "nb", "ntrack",
-               "sv_dr", "sv_ntrk", "sv_dlensig", "sv_mass", "sj_dr", "sj_pt", "sj_btag", "sj_muef")
+               "sv_dr", "sv_ntrk", "sv_dlensig", "sv_mass", "sj_dr", "sj_pt", "sj_btag", "sj_muef", "eta", "phi")
+NJ = 8  # selected jets kept per candidate (pT order as in the workflow; -99 padded)
+JET_FIELDS = {"pt": "pt", "eta": "eta", "phi": "phi", "mass": "mass", "btag": "btagUParTAK4B", "muef": "muEF"}
 
 
-def candidate_table(pruned_ev, weight=None):
+def candidate_table(pruned_ev, weight=None, jets=None, isb=None):
     """{column: column_accumulator} of the J/psi candidates of the selected events: CAND_FIELDS, the ttbar observables
-    (jpsi_tt_*, jpsi_mlj_*), the ttbar lepton(s) (pT, eta, isolation, m_T) and MET, run / lumi / event, the number of
-    good primary vertices and the event weight (1 for data)"""
+    (jpsi_tt_*, jpsi_mlj_*), the ttbar lepton(s) (pT, eta, phi, charge, isolation, m_T), MET (PF and PUPPI, with phi),
+    run / lumi / event, the number of good primary vertices and the event weight (1 for data).
+    jets: the selected jets of the events (the workflow's order), stored as jet<i>_<field> for i < NJ with their medium
+    b tag `isb`: with the J/psi direction, the ttbar system can be rebuilt offline (the workflow's jet assignment, or a
+    kinematic reconstruction) to test the pT balance of ttbar and J/psi."""
     from coffea.processor import column_accumulator
 
     ok = ak.to_numpy(ak.fill_none(pruned_ev.jpsi_valid, False))
@@ -303,12 +311,25 @@ def candidate_table(pruned_ev, weight=None):
     cols.update({f: pruned_ev[f] for f in pruned_ev.fields if f.startswith(("jpsi_tt_", "jpsi_mlj_", "jpsi_rside_"))})
     # the ttbar lepton(s) and MET, to tell ttbar from multijet events (isolation, m_T)
     met = pruned_ev.MET
-    cols["met"] = met.pt
+    cols["met"], cols["met_phi"] = met.pt, met.phi
+    if "PuppiMET" in pruned_ev.fields:
+        cols["puppimet"], cols["puppimet_phi"] = pruned_ev.PuppiMET.pt, pruned_ev.PuppiMET.phi
     for f, nm, iso in (("SelMuon", "mu", "pfRelIso04_all"), ("SelElectron", "e", "pfRelIso03_all")):
         if f in pruned_ev.fields:
             lep = pruned_ev[f]
-            cols.update({f"{nm}_pt": lep.pt, f"{nm}_eta": lep.eta, f"{nm}_iso": lep[iso],
+            cols.update({f"{nm}_pt": lep.pt, f"{nm}_eta": lep.eta, f"{nm}_phi": lep.phi, f"{nm}_q": lep.charge, f"{nm}_iso": lep[iso],
                          f"{nm}_mT": np.sqrt(2.0 * lep.pt * met.pt * (1.0 - np.cos(lep.phi - met.phi)))})
+    if jets is not None:
+        cols["njets"] = ak.num(jets.pt, axis=1)
+        pad = lambda a: ak.fill_none(ak.pad_none(a, NJ, axis=1, clip=True), -99)  # noqa: E731
+        for k, f in JET_FIELDS.items():
+            a = pad(jets[f])
+            for i in range(NJ):
+                cols[f"jet{i}_{k}"] = a[:, i]
+        if isb is not None:
+            a = pad(ak.values_astype(isb, np.int64))
+            for i in range(NJ):
+                cols[f"jet{i}_isb"] = a[:, i]
     cols["weight"] = np.ones(len(ok)) if weight is None else weight
     out = {}
     for k, v in cols.items():

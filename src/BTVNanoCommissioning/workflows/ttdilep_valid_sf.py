@@ -357,7 +357,13 @@ class NanoProcessor(processor.ProcessorABC):
         # the J/psi candidates, one row each, and the pileup of all selected events
         if jpsi_mode and shift_name is None:
             w = None if isRealData else weights.weight()
-            output["jpsi_cands"] = JPSI.candidate_table(pruned_ev, w)
+            # all selected jets with their UParT medium tag, for the ttbar system offline
+            alljets = event_jet[event_level]
+            try:
+                isb = btag_wp(alljets, self._year, self._campaign, "UParTAK4", "b", "M")
+            except Exception:
+                isb = alljets.btagUParTAK4B > 0.1272
+            output["jpsi_cands"] = JPSI.candidate_table(pruned_ev, w, jets=alljets, isb=ak.fill_none(isb, False))
             output["npv"] = JPSI.npv_hist(pruned_ev, w)
         # Output arrays
         if self.isArray:
