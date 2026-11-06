@@ -157,22 +157,21 @@ class NanoProcessor(processor.ProcessorABC):
         req_muon = ak.count(event_muon.pt, axis=1) == 1
 
         # J/psi -> mu mu (tt_semilep_jpsi, tt_semilep_e_jpsi): one dimuon from the loose-ID muons (no isolation) that
-        # are not tight isolated pT > 30 GeV muons (utils/jpsi.py). Its two muons are exempt from the jet cleaning
-        # below, which otherwise removes every jet within 0.4 of any muon, i.e. a jet that contains the J/psi.
+        # are not tight isolated pT > 30 GeV muons (utils/jpsi.py). The jets are then cleaned against the tight
+        # isolated pT > 30 GeV muons only, as in the dilepton workflow: cleaning against every other muon (any ID)
+        # removed most b jets around a J/psi, through a soft muon of the b decay or a muon object without ID in the
+        # jet, so that b-decay J/psi counted as not b-matched; and with mask_identity=True an event without such a
+        # muon had no jets, so the e + jets channel kept only events with an extra muon.
         jpsi_mode = self.ttaddsel in ("tt_semilep_jpsi", "tt_semilep_e_jpsi")
         clean_mu = events.Muon
         if jpsi_mode:
-            jinfo, jpair = JPSI.find_jpsi(
-                events,
-                JPSI.jpsi_muon_mask(
-                    events, (events.Muon.pt > 30) & btag_mu_idiso(events, self._campaign)
-                ),
-            )
+            tight_mu = (events.Muon.pt > 30) & btag_mu_idiso(events, self._campaign)
+            jinfo, jpair = JPSI.find_jpsi(events, JPSI.jpsi_muon_mask(events, tight_mu))
             jinfo["truth"] = JPSI.jpsi_truth(events, jinfo)
-            clean_mu = events.Muon[~jpair]
+            clean_mu = events.Muon[tight_mu & ~jpair]
 
         ## Jet cuts
-        # the electron mirror keeps the muon-channel jet definition (away from all muons) and also
+        # the electron mirror keeps the muon-channel jet definition (away from the muons of clean_mu) and also
         # removes jets within 0.4 of the selected electron
         clean_e = (
             ak.all(events.Jet.metric_table(event_muon) > 0.4, axis=2, mask_identity=True)
@@ -183,10 +182,11 @@ class NanoProcessor(processor.ProcessorABC):
             ak.fill_none(
                 jet_id(events, self._campaign)
                 & (
+                    # mask_identity=False: no muon to clean against keeps the jet (True would give None, i.e. no jets)
                     ak.all(
                         events.Jet.metric_table(clean_mu) > 0.4,
                         axis=2,
-                        mask_identity=True,
+                        mask_identity=False,
                     )
                 )
                 & clean_e,
@@ -262,7 +262,7 @@ class NanoProcessor(processor.ProcessorABC):
                     ak.all(
                         events.Jet.metric_table(clean_mu) > 0.4,
                         axis=2,
-                        mask_identity=True,
+                        mask_identity=False,
                     )
                 )
             )
