@@ -44,3 +44,25 @@ tqdm = "==4.66.4"
 p-tqdm = "==1.4.2"
 alive-progress = "*"
 setuptools = "==70.1.1"
+
+# The analysis on top of the grid environment: `pixi run -e analysis ...` (scripts/ttJ/analysis: fits, sPlot, the
+# simulation and generator comparisons, the cms-plotting / plotlyhep figures, the HTML deck). It is the grid
+# environment plus these packages, so the coffea steps (build_ttJ.py, dump_cands.py) run in it as well and the grid
+# environment itself (and its lock) is unchanged. kaleido renders PNG/PDF with a Chrome found on the machine
+# (`pixi run -e analysis python -c "import kaleido; kaleido.get_chrome_sync()"` downloads one where there is none).
+[feature.analysis.pypi-dependencies]
+iminuit = "==2.32.0"
+plotly = "==6.7.0"
+kaleido = "==1.5.0"
+pillow = "==11.2.1"
+plotlyhep = { git = "https://github.com/DickyChant/plotlyhep", rev = "49fe516c52590b45d041f0bd2d57e2ec15d5b27f" }
+
+# The Manim explainer animation (scripts/ttJ/analysis/anim): its own stack (cairo, pango, ffmpeg from conda-forge),
+# not on top of the grid environment.
+[feature.anim.dependencies]
+python = "3.12.*"
+manim = "0.19.0.*"
+
+[environments]
+analysis = ["analysis"]
+anim = { features = ["anim"], no-default-feature = true }

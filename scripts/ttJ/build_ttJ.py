@@ -67,7 +67,8 @@ def chan_name(ds, ch):
     return {"dil": "emu"}.get(ch, ch)
 
 
-is_data = lambda ds: re.match(r"(Single)?(Muon|EGamma)\d*Run20\d\d", ds) is not None  # noqa: E731
+# TTJ_AS_DATA=1: every data set counts as data (unweighted): MC as pseudo-data for a closure test of the data chain
+is_data = lambda ds: os.environ.get("TTJ_AS_DATA") == "1" or re.match(r"(Single)?(Muon|EGamma)\d*Run20\d\d", ds) is not None  # noqa: E731
 # only these years (comma-separated, e.g. TTJ_YEARS=2022,2023), from the dataset names; all if unset
 YEARS = [y for y in os.environ.get("TTJ_YEARS", "").split(",") if y]
 in_years = lambda ds: not YEARS or any(f"Run{y}" in ds for y in YEARS)  # noqa: E731

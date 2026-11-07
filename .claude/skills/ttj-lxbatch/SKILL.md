@@ -106,6 +106,11 @@ It sums the nominal histograms per channel and writes the J/psi spectra, the sid
 lifetime regions (prompt |l_xy| < 0.06 mm, non-prompt l_xy > 0.1 mm, pileup-like |z0| >= 0.1 cm) and the ttbar
 kinematics of the J/psi events. It also reads the older hadw_jpsi / hadw_e_jpsi outputs ("sl"/"dil" channels).
 
+The analysis after the summaries (candidate tables, the ttbar-jet veto, the lifetime and m x l_xy fits, the simulation,
+generator and background comparisons, figures, deck, analysis-note figures) is in `scripts/ttJ/analysis/` (README.md
+there); it runs in the `analysis` environment of `pixi.toml` (the grid environment plus the fit and plotting packages):
+`pixi run -e analysis python <script>`.
+
 ## Changing the environment
 
 Edit `pixi.toml`, run `pixi lock`, and commit `pixi.lock` with it: the jobs install with `--locked`, so a stale lock

@@ -1,0 +1,43 @@
+# cms-plotting customization for the hadW n_track / ttbar + J/psi decks (www/hadW_ntrack_ttbar/<date>/files/).
+# The style module is cmsdeck.py (the skill's cmsplot_plotly.py copied next to it + the deck additions); older decks: plot_helpers.py.
+style_module = "cmsdeck"
+
+[era.run3]
+com = 13.6
+rlabel = "2022–2026, 310 fb$^{-1}$ (13.6 TeV)"
+rlabel_html = "2022–2026, 310 fb<sup>−1</sup> (13.6 TeV)"
+
+[era.y2024]
+com = 13.6
+rlabel = "2024, 109.9 fb$^{-1}$ (13.6 TeV)"
+rlabel_html = "2024, 109.9 fb<sup>−1</sup> (13.6 TeV)"
+
+[era.sim]
+com = 13.6
+data = false
+rlabel = "Simulation"
+
+[axis]
+m_mumu = '$m(\mu^+\mu^-)$ [GeV]'
+lxy = '$\ell_{xy}$ [mm]'
+lxy_html = 'ℓ<sub>xy</sub> [mm]'
+pt_jpsi_html = 'p<sub>T</sub>(J/ψ) [GeV]'
+
+[name]
+prompt = "prompt J/ψ"
+bdecay = "b-hadron decay"
+comb = "no common J/ψ parent"
+data = "Data"
+sim = "t̅t simulation (POWHEG + Pythia 8)"
+leto = "Pythia 8 + LETO"
+dps = "2nd scattering"
+
+# one slot per species on every canvas of a study
+[species]
+bdecay = "s1"
+prompt = "s2"
+comb = "comb"
+fit_total = "total"
+top_decay = "s1"   # Pythia + LETO canvases
+isr = "s2"
+dps = "comb"
