@@ -356,6 +356,34 @@ content("sim-ttj", "Simulation · vetoed jets", f"In the vetoed jets the b-decay
               f"{TTJ_RF['nb_pred']:.0f} expected, {TTJ_RF['N_b']:.0f} +- {TTJ_RF['N_b_err']:.0f} fitted; free: {TF_FREE['N_b']:.0f} +- {TF_FREE['N_b_err']:.0f}. "
               f"Closure of the binned fit on the simulation: {MTF['closure']['ttj_ljets']['N_p']:.0f} +- {MTF['closure']['ttj_ljets']['N_p_err']:.0f} for {MTF['closure']['ttj_ljets']['truth_prompt']:.0f} true.")
 
+# --- the toy closure of the fits (toy_closure.py -> toy_summary.py)
+if os.path.exists(os.path.join(D.HERE, "toy_closure.json")):
+    TCS = J("toy_closure.json")
+    TCP = {(p_["scenario"], p_["inject"]): p_ for p_ in TCS["points"]}
+    TFN = (("lxy", "ℓ<sub>xy</sub>"), ("fit2d", "2D"), ("unbinned", "unbinned"), ("unbinned_global", "unbinned, 1 res."))
+
+    def tb(sc, k, inj=100):
+        q = TCP.get((sc, inj))
+        return f"{q[k]['bias']:+.0f} ± {q[k]['bias_err']:.0f} ({q[k]['pull_mean']:+.1f} / {q[k]['pull_width']:.2f})" if q else "–"
+
+    trow = [[nm, tb("mc", k), tb("datalike", k)] for k, nm in TFN]
+    q100 = TCP.get(("mc", 100)) or TCP.get(("datalike", 100))
+    U1, U2 = TCP.get(("mc", 100)), TCP.get(("datalike", 100))
+    ttl = ("Toy closure: the ℓ<sub>xy</sub> fit is low by a quarter; the unbinned fit is off by "
+           + (f"{U1['unbinned']['bias']:+.0f} or {U2['unbinned']['bias']:+.0f} at {U1['unbinned']['truth']:.0f} true, as the b jets hold no or data-like prompt J/ψ" if U1 and U2 else "a constant set by the b-jet content"))
+    content("sim-toys", "Simulation · toy closure", ttl,
+            f'<div class="row" style="gap:36px"><div class="fig">{F("mc_toys_mc", "b jets as simulated", 0.62)}</div>'
+            f'<div class="fig">{F("mc_toys_datalike", "prompt J/ψ in b jets as in data", 0.62)}</div><div class="col">'
+            + table(["fit − truth (pull)", "b jets as simulated", "as in data"], trow, widths=[28, 36, 36], num=(1, 2), hl=(2,))
+            + "</div></div>"
+            + ul([f"<b>Toys:</b> data-sized draws from the {TB} simulation, 0–150 truth-prompt J/ψ added outside the {TB} jets, the chain of the data, {q100['n'] if q100 else ''} toys per point; table at 100 injected",
+                  "<b>Reading:</b> the ℓ<sub>xy</sub> fit is low, more so with more signal; the m × ℓ<sub>xy</sub> fits are offset by a constant whose sign follows whether the b jets' prompt-like share is a b-decay feature (as the fits assume) or real prompt J/ψ"], "b s"),
+            t="mc",
+            notes="toy_closure.py (hadw/toys_closure/toys.jsonl), toy_summary.py: per toy the candidates of each stratum (channel, category, sign, lifetime class) drawn without replacement "
+                  "from the simulation in the numbers of the data, n_inj ~ Poisson truth-prompt J/psi of the simulation (all categories, primary vertex) added outside the ttbar jets; "
+                  "'as in data': prompt J/psi also added to the b jets, 5% of their b decays. Truth = injected + the simulation's own prompt J/psi among the drawn signal candidates "
+                  "(full mass range; window - sidebands for the l_xy fit). Pull = (fit - truth) / the fit's error.")
+
 EVR = {ch: MCC["events"][ch]["ratio"] for ch in ("mujets", "ejets", "emu")}
 LAM_D, LAM_M = FJ["lt2d"]["params"]["lam_inb"], MFJ["lt2d"]["params"]["lam_inb"]
 content("sim-rates", "Simulation · rates", f"The {TB} simulation alone (backgrounds being processed) matches the b decays ({RI['ratio_bdecay']:.2f}, {RS['ratio_bdecay']:.2f}); its prompt J/ψ: {RS['data_prompt'][0] / RS['mc_prompt'][0]:.0f}× below data outside the {TB} jets",
@@ -607,6 +635,13 @@ content("bk-sim", "Backup · simulation", f"The vetoed category against the simu
               f"the simulated b decays have no prompt-like part, the unbinned fit gives the b decays the {100 * FPI_D:.1f}% prompt-like share of the data b jets (≈ {FPI_D * SPF['N'][1]:.0f} J/ψ); "
               f"closure of the binned fit on the simulation: {MTF['closure']['signal_all']['N_p']:.0f} ± {MTF['closure']['signal_all']['N_p_err']:.0f} for {MTF['closure']['signal_all']['truth_prompt']:.0f} true"], "b s"),
         alt=True)
+
+if os.path.exists(os.path.join(D.HERE, "toy_closure.json")):
+    PF = [(n, c) for n, c in (("mc_toypulls_mc", "b jets as simulated"), ("mc_toypulls_datalike", "prompt J/ψ in b jets as in data"))
+          if os.path.exists(os.path.join(D.HERE, "figs", n + ".json"))]
+    if PF:
+        content("bk-toys", "Backup · toy closure", "Pulls of the prompt fits at 100 injected prompt J/ψ",
+                '<div class="row" style="gap:44px">' + "".join(f'<div class="fig">{F(n, c, 0.7)}</div>' for n, c in PF) + "</div>", alt=True)
 
 content("refs", "References", "References",
         '<ol class="refs">'

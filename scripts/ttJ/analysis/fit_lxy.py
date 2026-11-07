@@ -103,8 +103,24 @@ def fit(tail=(0.0, 3.0), same_lam=False, coarse_bins=False, inb_template=True, c
         mi.fixed["fp_notb"] = True
     mi.migrad()
     mi.hesse()
-    mi.minos("fp_inb", *(() if no_prompt else ("fp_notb",)))
+    safe_minos(mi, "fp_inb", *(() if no_prompt else ("fp_notb",)))
     return mi
+
+
+def safe_minos(mi, *pars):
+    """MINOS where the minimum is valid; otherwise (e.g. a fraction at its limit of 0 in a toy) the HESSE errors stand in"""
+    try:
+        mi.minos(*pars)
+    except RuntimeError:
+        pass
+
+
+def merr(mi, k):
+    """[lower, upper] error: MINOS if it ran, else -/+ the HESSE error"""
+    try:
+        return [float(mi.merrors[k].lower), float(mi.merrors[k].upper)]
+    except (KeyError, RuntimeError):
+        return [-float(mi.errors[k]), float(mi.errors[k])]
 
 
 def signif(**kw):
@@ -116,9 +132,9 @@ mi = fit()
 print(mi.fmin)
 P = {k: float(mi.values[k]) for k in mi.parameters}
 ERR = {k: float(mi.errors[k]) for k in mi.parameters}
-MINOS = {k: [float(mi.merrors[k].lower), float(mi.merrors[k].upper)] for k in ("fp_inb", "fp_notb")}
+MINOS = {k: merr(mi, k) for k in ("fp_inb", "fp_notb")}
 out = {"edges": E.tolist(), "params": P, "errors": ERR, "minos": MINOS, "valid": bool(mi.valid and mi.fmin.has_accurate_covar),
-       "minos_valid": {k: bool(mi.merrors[k].is_valid) for k in MINOS}, "samples": {}, "channels": {}, "variations": {}}
+       "minos_valid": {k: bool(k in mi.merrors and mi.merrors[k].is_valid) for k in MINOS}, "samples": {}, "channels": {}, "variations": {}}
 for c in CATS:
     n, m = DATA[c]
     p, d = shapes(P["s1"], P["lam_inb"])
@@ -137,7 +153,7 @@ for name, kw in (("exp", {"inb_template": False}), ("tail", {"tail": (0.2, 3.0)}
                  ("mu_emu", {"chans": ("mujets", "emu")})):
     v = fit(**kw)
     out["variations"][name] = {k: float(v.values[k]) for k in v.parameters} | {"valid": bool(v.valid)}
-    out["variations"][name]["fp_notb_minos"] = [float(v.merrors["fp_notb"].lower), float(v.merrors["fp_notb"].upper)]
+    out["variations"][name]["fp_notb_minos"] = merr(v, "fp_notb")
     out["variations"][name]["N_notb_err"] = float(v.errors["N_notb"])
     out["variations"][name]["errors"] = {k: float(v.errors[k]) for k in v.parameters}
     print(f"variation {name}: f_prompt inb {v.values['fp_inb']:.3f}, not b-matched {v.values['fp_notb']:.3f} (nominal {P['fp_notb']:.3f}); valid {v.valid}")
@@ -158,14 +174,14 @@ for ch in CH:
     mc = Minuit(make_nll(n, m), N=max(float(n.sum() - m.sum() / TAU), 5.0), fp=0.3)
     mc.errordef = Minuit.LIKELIHOOD
     mc.limits["N"], mc.limits["fp"] = (0, np.inf), (0, 1)
-    mc.migrad(); mc.hesse(); mc.minos("fp")
+    mc.migrad(); mc.hesse(); safe_minos(mc, "fp")
     out["channels"][ch] = {"N": float(mc.values["N"]), "N_err": float(mc.errors["N"]), "fp": float(mc.values["fp"]),
-                           "fp_minos": [float(mc.merrors["fp"].lower), float(mc.merrors["fp"].upper)], "sub": float(n.sum() - m.sum() / TAU),
+                           "fp_minos": merr(mc, "fp"), "sub": float(n.sum() - m.sum() / TAU),
                            # the canvas of the fit: window - sidebands / TAU per coarse bin, and the fitted components
                            "edges": list(map(float, EC)), "data": (n - m / TAU).tolist(), "data_err": np.sqrt(n + m / TAU ** 2).tolist(),
                            "prompt": (mc.values["N"] * mc.values["fp"] * p).tolist(), "nonprompt": (mc.values["N"] * (1 - mc.values["fp"]) * d).tolist()}
     print(f"  {ch} not b-matched: N {mc.values['N']:.1f} +- {mc.errors['N']:.1f} (window - sidebands {n.sum() - m.sum() / TAU:.1f}),"
-          f" f_prompt {mc.values['fp']:.3f} {mc.merrors['fp'].lower:+.3f} {mc.merrors['fp'].upper:+.3f}")
+          f" f_prompt {mc.values['fp']:.3f} {merr(mc, 'fp')[0]:+.3f} {merr(mc, 'fp')[1]:+.3f}")
 out["signif"] = {"nominal": signif(), "exp": signif(inb_template=False), "mu_emu": signif(chans=("mujets", "emu"))}
 print("prompt significance:", {k: round(v, 1) for k, v in out["signif"].items()})
 json.dump(out, open(sys.argv[2], "w"), indent=1)

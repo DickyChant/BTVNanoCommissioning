@@ -63,6 +63,7 @@ pixi run -e analysis --manifest-path $TTJ_REPO/pixi.toml python stage_an.py <an_
 | Pythia 8 + LETO (gen level) | `genstudy/gen_ttjpsi.py` (batch: `genstudy/run_ttjpsi.sh`), `gen_assoc.py`, `gen_leak_z.py`, `gen_cutscan.py`, `gen_compare.py` | `gen_*.json` |
 | data / ttbar simulation, closure, backgrounds | `mc_compare.py` (`TTJ_BKG`), `mc_template_fit.py` | `mc_compare.json`, `mc_template.json` |
 | generators and tunes | `gen_variants.py` | `gen_variants.json` |
+| closure of the prompt fits with toys (data-sized draws from the simulation, injected prompt J/psi, the whole chain per toy) | `toy_closure.py` (`--retry-failed`), `toy_summary.py` | `toys.jsonl`, `toy_closure.json` |
 | figures | `make_figs_run3.py`, `make_figs_balance.py`, `make_figs_assoc.py`, `make_figs_gencmp.py`, `make_figs_mc.py`, `make_figs_an.py` (with `cmsdeck.py` on the cms-plotting skill's `cmsplot_plotly.py`) | `figs/*.json` |
 | deck | `build_deck_assoc.py` (with `deck_lib.py`) | `slides.html`, `../index.html` |
 | analysis-note figures | `stage_an.py` | `<an dir>/*.pdf`, `MANIFEST.txt`, `MC_SAMPLES.txt` |

@@ -13,12 +13,16 @@ with cmsdeck (the cms-plotting skill's cmsplot_plotly + the deck additions; rule
   figs/chan_mt.json                  m_T(l, pT^miss) of the events with a prompt J/psi outside the ttbar jets (sWeights), mu + jets and
                                      e + jets, against the b-decay ones (both channels); prompt / b decay
   figs/chan_rates.json               prompt and b-decay J/psi per channel: data (sWeights) against the simulation; data / simulation
+  figs/mc_toys_{mc,datalike}.json    (toy_closure.json) toy experiments from the simulation with injected prompt J/psi: mean fitted
+                                     against true prompt yield per fit; fit - truth
+  figs/mc_toypulls_{mc,datalike}.json  pulls of the fits at 100 injected prompt J/psi against a unit Gaussian
   figs/mcvar_ratio.json              (gen_variants.json) prompt J/psi per b-decay J/psi within each sample (normalisation-free), outside the
                                      ttbar jets and in b jets, against the data; data / generator
   figs/mcvar_{signal,inb}.json       (gen_variants.json) prompt and b-decay J/psi per generator / tune (MC truth, l + jets)
                                      against the data (sWeights); data / generator
 usage: python3 make_figs_mc.py"""
 import json
+import math
 import os
 import sys
 import warnings
@@ -31,7 +35,7 @@ warnings.filterwarnings("ignore")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from cmsdeck import (CH3, NB1, SERIES, TT, Z0, bin_label, data_points, draw_pull, draw_ratio, fill_between, headroom, label,  # noqa: E402
-                     legend, ratio_canvas, save, step, ylabel, zero_line)
+                     legend, line, ratio_canvas, save, step, xlabel, ylabel, zero_line)
 
 C = json.load(open(os.path.join(HERE, "mc_compare.json")))
 T = json.load(open(os.path.join(HERE, "mc_template.json")))
@@ -341,6 +345,55 @@ if len(GV["gen"]) > 1:
         ylabel(f, "J/ψ", chars=5)
         legend(f, f"{LJ_SEL}; {where}<br>{SIMN}")
         save(f, f"mcvar_{cat}")
+# ---- the toy closure of the fits: mean fitted against true prompt yield, fit - truth
+TCJ = os.path.join(HERE, "toy_closure.json")
+if os.path.exists(TCJ):
+    TC = json.load(open(TCJ))
+    FITC = (("lxy", "ℓ<sub>xy</sub> fit", SERIES["s3"], "square"), ("fit2d", "binned 2D fit", SERIES["comb"], "diamond"),
+            ("unbinned", "unbinned fit", SERIES["data"], "circle"), ("unbinned_global", "unbinned fit, one resolution", SERIES["s4"], "triangle-up"))
+    for sc, what in (("mc", "b jets as simulated (no prompt J/ψ)"), ("datalike", "prompt J/ψ in b jets as in data (5% of b decays)")):
+        pts = [p_ for p_ in TC["points"] if p_["scenario"] == sc]
+        if not pts:
+            continue
+        f, ax, axr = ratio_canvas()
+        top = max(max(p_[k]["fit"] + p_[k]["rms"] for k, _, _, _ in FITC) for p_ in pts)
+        line(f, [0, 1.15 * top], [0, 1.15 * top], "grey", "fitted = true", dash="dash", width=1.2)
+        for j, (k, nm, col, sym) in enumerate(FITC):
+            dx = (j - 1.5) * 1.5
+            x = np.array([p_[k]["truth"] for p_ in pts]) + dx
+            y = np.array([p_[k]["fit"] for p_ in pts])
+            rms = np.array([p_[k]["rms"] for p_ in pts])
+            data_points(f, x, y, rms, label=nm, color=col, symbol=sym)
+            data_points(f, x, [p_[k]["bias"] for p_ in pts], [p_[k]["bias_err"] for p_ in pts], label=None, ax=axr, color=col, symbol=sym, size=3)
+        zero_line(f, axr)
+        f.update_layout(xaxis=dict(range=[0, 1.1 * top]), xaxis2=dict(range=[0, 1.1 * top]), yaxis=dict(range=[0, 1.8 * top]))
+        label(f, rlabel="13.6 TeV", sim=True)
+        ylabel(f, "mean fitted prompt J/ψ", chars=4)
+        ylabel(f, "fit − truth", ax=axr)
+        xlabel(f, "true prompt J/ψ outside the t̅t jets (mean per point)")
+        legend(f, f"toys from the {TT} simulation, data-sized, injected prompt J/ψ<br>{what}; {pts[0]['n']} toys per point; bars: toy spread", x=0.03, xanchor="left")
+        save(f, f"mc_toys_{sc}")
+        # the pulls at the injected 100 J/psi against a unit Gaussian
+        P100 = next((p_ for p_ in pts if p_["inject"] == 100), None)
+        if P100 and "pull_hist" in P100["unbinned"]:
+            pe = np.asarray(TC["pull_edges"], float)
+            pc, pw = 0.5 * (pe[1:] + pe[:-1]), float(pe[1] - pe[0])
+            f, ax, axr = ratio_canvas()
+            gx = np.linspace(pe[0], pe[-1], 300)
+            n_ = P100["n"]
+            line(f, gx, n_ * pw * np.exp(-0.5 * gx ** 2) / np.sqrt(2 * np.pi), "grey", "unit Gaussian", dash="dash", width=1.5)
+            gb = n_ * (0.5 * (1 + np.vectorize(math.erf)(pe[1:] / np.sqrt(2))) - 0.5 * (1 + np.vectorize(math.erf)(pe[:-1] / np.sqrt(2))))
+            for j, (k, nm, col, sym) in enumerate(FITC):
+                h = np.asarray(P100[k]["pull_hist"], float)
+                step(f, pe, h, col, f"{nm}: mean {P100[k]['pull_mean']:+.2f}, width {P100[k]['pull_width']:.2f}", width=2.0)
+                draw_ratio(f, axr, pc + (j - 1.5) * 0.06, h, np.sqrt(h), gb, None, lo=pe[0], hi=pe[-1], xlab="pull = (fitted − true) / fitted error",
+                           ylab="toys / Gaussian", rng=(0, 4), color=col, symbol=sym, band=(j == 0))
+            headroom(f, max(max(P100[k]["pull_hist"]) for k, _, _, _ in FITC), factor=2.4)
+            label(f, rlabel="13.6 TeV", sim=True)
+            ylabel(f, f"toys / {pw:g}", chars=3)
+            legend(f, f"toys from the {TT} simulation, {P100['inject']} prompt J/ψ injected (true {P100['unbinned']['truth']:.0f})<br>{what}; {n_} toys")
+            save(f, f"mc_toypulls_{sc}")
+
 # ---- prompt per b-decay J/psi within each sample: does not depend on the normalisation of the sample
 if "ratio" in GV and len(GV["gen"]) > 1:
     gens = [g for g in GV["gen"] if f"{g}|signal" in GV["ratio"]]
