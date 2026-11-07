@@ -9,7 +9,7 @@ Chapters:
    5 three categories: b jets, additional jets, outside the top-decay jets; the W-pair veto; z of the J/ψ; Pythia 8 + LETO
    6 signal extraction: mass, decay length, three fit models, per year
    7 the CMS tt̄ simulation: closure, short b decays in untagged jets, data against simulation
-   8 which fit model: toy closure          9 associated production and multiple parton scattering (interpretation)
+   8 which fit model and b-decay shape: toy closure          9 associated production and multiple parton scattering (interpretation)
   10 generators and tunes (preliminary)   11 summary and next steps
 render (the anim environment of pixi.toml; from this directory; CHAPTERS=1,5 renders a subset):
     pixi run -e anim manim render -r 1920,1080 --fps 30 --format mp4 -o ttjpsi ttjpsi.py TtJpsi
@@ -44,6 +44,8 @@ O3 = np.array([0.0, 0.0, 0.0])
 R, FJ, FL, SPL = J("results_run3.json"), J("fit_jpsi.json"), J("fit_lxy.json"), J("splot.json")
 MCC, MTF, GX, GEN, GZ = J("mc_compare.json"), J("mc_template.json"), J("gen_compare.json"), J("gen_assoc.json"), J("gen_leak_z.json")
 BAL, WP, GV, TC = J("ttbar_balance.json"), J("wpair_check.json"), J("gen_variants.json"), J("toy_closure.json")
+# the per-category b-decay template (btemplate_mc.py), the data fits with it (btmpl/) and the toys with it
+BTM, BS, TCB = J("btemplate.json"), J(os.path.join("btmpl", "splot.json")), J("toy_closure_btmpl.json")
 YEARS = ["2022", "2023", "2024", "2025", "2026"]
 # the integrated luminosity per year, as the figures of the outputs directory use it
 LUMI = {k: float(v) for k, v in re.findall(r'"(20\d\d)": ([0-9.]+)', re.search(r"^LUMI = \{.*\}$", open(os.path.join(FILES, "build_deck_assoc.py")).read(), re.M).group(0))}
@@ -75,13 +77,25 @@ PRED = {float(k): v for k, v in DPS["pred_prompt_notb_by_sigma_eff_mb"].items()}
 SNC = GX["scaled"]["nominal_bcorr"]
 BP = {k: BAL["profile"][f"{k}_excl_all"]["ppar_all_pt"] for k in ("prompt", "sps", "dps", "pileup")}
 TCP = {(p["scenario"], p["inject"]): p for p in TC["points"]}
+TCPB = {(p["scenario"], p["inject"]): p for p in TCB["points"]}
+F_B = BS["fits"]["notb"]  # the unbinned fit with the per-category b-decay template (proposed nominal)
+NP_B, NPB_LO, NPB_HI = F_B["N"][0], -F_B["NP_minos"][0], F_B["NP_minos"][1]
+RATE_B, RATE_BE = NP_B / NTT_ALL, 0.5 * (NPB_LO + NPB_HI) / NTT_ALL
+HAS_BKG = bool(EV["mujets"].get("bkg"))
+
+
+def simp(r, sp):
+    """the simulation of one species: ttbar + the non-ttbar backgrounds (QCD not stacked) when processed"""
+    return r[f"mc_{sp}"][0] + (r[f"bkg_{sp}"][0] if HAS_BKG and f"bkg_{sp}" in r else 0.0)
 GR = GV["ratio"]
 PL = SPL["pu_leak"]
 WPP = WP["wpair"]
 
 
 def s0(x, d=0, sign=False):
-    """number with a true minus sign"""
+    """number with a true minus sign (0, not −0, when it rounds to zero)"""
+    if round(x, d) == 0:
+        return f"{0:.{d}f}"
     return (f"{x:+.{d}f}" if sign else f"{x:.{d}f}").replace("-", "−")
 
 
@@ -710,7 +724,7 @@ class TtJpsi(Scene):
         cats = VGroup(
             para(f"<b><span foreground='{B}'>1</span>  non-prompt J/ψ in the b jets of the top decays</b>\nt → W b, b → H<sub>b</sub> X, H<sub>b</sub> → J/ψ X: the fragmentation reference; <b>{MASS['inb_pv']['Ns']:.0f} ± {MASS['inb_pv']['Ns_err']:.0f}</b> J/ψ from the primary vertex", 20, W_),
             para(f"<b><span foreground='{LTC}'>2</span>  prompt J/ψ in additional jets</b>, not assigned to the top decays: quarkonium in QCD radiation (of the signal below: {INJET:.0f} in such a jet, {NOJET:.0f} in no jet)", 20, W_),
-            para(f"<b><span foreground='{P}'>3</span>  prompt J/ψ separated from all top-decay jets</b> (ΔR &gt; 0.4), with or without a jet: inclusive associated production\n<b>{NP_U:.0f} ± {NPE_U:.0f}</b> prompt J/ψ, <b>{F_U['signif_prompt']:.1f}σ</b>; R = ({RATE * 1e6:.1f} ± {RATE_E * 1e6:.1f}) × 10<sup>−6</sup> per selected tt̄ event", 20, W_),
+            para(f"<b><span foreground='{P}'>3</span>  prompt J/ψ separated from all top-decay jets</b> (ΔR &gt; 0.4), with or without a jet: inclusive associated production\n<b>{NP_B:.0f} <sup>+{NPB_HI:.0f}</sup><sub>−{NPB_LO:.0f}</sub></b> prompt J/ψ, <b>{F_B['signif_prompt']:.1f}σ</b> with the per-category b-decay shape (proposed nominal); R = ({RATE_B * 1e6:.1f} ± {RATE_BE * 1e6:.1f}) × 10<sup>−6</sup> per selected tt̄ event; with the b-jet template {NP_U:.0f} ± {NPE_U:.0f}, {F_U['signif_prompt']:.1f}σ, R = ({RATE * 1e6:.1f} ± {RATE_E * 1e6:.1f}) × 10<sup>−6</sup> (statistical)", 20, W_),
             para(f"J/ψ in the jets of the W decay (and of the b quarks) are top-decay products: <b>vetoed</b> from category 3 ({CATN['ttj']:.0f} J/ψ in the W-pair and other tt̄ jets)", 19, W_, LTC),
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.32)
         cats.move_to([-1.8 + cats.width / 2, 2.75 - cats.height / 2, 0])
@@ -748,24 +762,26 @@ class TtJpsi(Scene):
         self.set_head(5, "Signal extraction: mass × decay length")
         self.page(Plot("splot_proj_l"), ["2D extended maximum-likelihood fit, mass × ℓ<sub>xy</sub>, per-candidate ℓ<sub>xy</sub> resolution",
                                          "the b-decay ℓ<sub>xy</sub> shape constrained from b-jet data and simulation",
-                                         f"prompt J/ψ: <b>{NP_U:.0f} ± {NPE_U:.0f}, {F_U['signif_prompt']:.1f}σ</b> (statistical); b decays {F_U['N'][1]:.0f} ± {F_U['N_err'][1]:.0f}"], wait=9.0)
+                                         f"prompt J/ψ: <b>{NP_U:.0f} ± {NPE_U:.0f}, {F_U['signif_prompt']:.1f}σ</b> (statistical) with the b-jet template; b decays {F_U['N'][1]:.0f} ± {F_U['N_err'][1]:.0f}"], wait=9.0)
         # three fit models
-        self.set_head(5, "Three fit models")
-        rows = [("extended ML fit, m × ℓ<sub>xy</sub>, per-candidate resolution (nominal)", f"{NP_U:.0f} ± {NPE_U:.0f}", f"{F_U['signif_prompt']:.1f}σ"),
+        self.set_head(5, "Fit models")
+        rows = [("unbinned fit, m × ℓ<sub>xy</sub>, b-decay shape per category (proposed nominal)", f"{NP_B:.0f} <sup>+{NPB_HI:.0f}</sup><sub>−{NPB_LO:.0f}</sub>",
+                 f"{F_B['signif_prompt']:.1f}σ"),
+                ("unbinned fit, m × ℓ<sub>xy</sub>, b-decay shape of the data b jets", f"{NP_U:.0f} ± {NPE_U:.0f}", f"{F_U['signif_prompt']:.1f}σ"),
                 ("binned 2D fit, m × ℓ<sub>xy</sub>", f"{L2['N_P']:.0f}", f"{FJ['lt2d']['signif_prompt_notb']:.1f}σ"),
                 ("ℓ<sub>xy</sub> fit, background from the mass sidebands", f"{F_LXY:.0f}", f"{FL['signif']['nominal']:.1f}σ")]
         tab = VGroup(VGroup(M("<b>fit model</b>", 22), M("<b>prompt J/ψ</b>", 22), M("<b>significance</b>", 22)))
         for a, b_, c in rows:
-            tab.add(VGroup(para(a, 22, 7.6, INK2), M(f"<b>{b_}</b>", 26, P), M(c, 24, INK2)))
+            tab.add(VGroup(para(a, 22, 8.9, INK2), M(f"<b>{b_}</b>", 26, P), M(c, 24, INK2)))
         for i, r in enumerate(tab):
-            y = 1.9 - 0.95 * i
+            y = 1.9 - 0.9 * i
             r[0].move_to([-6.4 + r[0].width / 2, y, 0])
-            r[1].move_to([3.0, y, 0])
-            r[2].move_to([5.4, y, 0])
+            r[1].move_to([3.7, y, 0])
+            r[2].move_to([5.9, y, 0])
         self.play(FadeIn(tab[0]), run_time=0.6)
         self.play(LaggedStart(*[FadeIn(r, shift=0.2 * RIGHT) for r in tab[1:]], lag_ratio=0.4), run_time=2.0)
-        note = para(f"statistical only · the alternative fits give {min(F_LXY, L2['N_P']):.0f}–{max(L2['N_P'], W1['N_p']):.0f} (the toy closure shows why) · without e + jets {FL['signif']['mu_emu']:.1f}σ (ℓ<sub>xy</sub> fit; expected {FL['signif']['exp']:.1f}σ)", 21, 12.6)
-        note.move_to([-6.4 + note.width / 2, -1.6, 0])
+        note = para(f"statistical only · the toy closure (chapter 8) picks the per-category b-decay shape: the b-jet shape copies the {100 * FJ['lt2d']['params']['NP_inb'] / (FJ['lt2d']['params']['NP_inb'] + FJ['lt2d']['params']['NNP_inb']):.1f}% prompt-like share of the data b jets onto the signal's b decays · the ℓ<sub>xy</sub> fit runs low · without e + jets {FL['signif']['mu_emu']:.1f}σ (ℓ<sub>xy</sub> fit)", 21, 12.6)
+        note.move_to([-6.4 + note.width / 2, -2.85, 0])
         self.play(FadeIn(note), run_time=0.8)
         self.wait(8.0)
         self.body_out()
@@ -787,28 +803,39 @@ class TtJpsi(Scene):
                                       "a single b-jet template takes them for prompt"], wait=8.0)
         self.page(Plot("mc_tfit_ttj"), [f"one template: {ct['fit_prompt']:.0f} prompt J/ψ found for {ct['truth_prompt']:.0f} true in the vetoed jets of the simulation",
                                         f"with the b-decay shape of that category: <b>{TTJ_C['N_p']:.0f} ± {TTJ_C['N_p_err']:.0f}</b> prompt of the {TTJ_U:.0f} of the unbinned fit (data)",
-                                        "→ category-dependent decay-length models, validated by closure and alternative samples"], wait=9.0)
-        self.set_head(6, "Data against the tt̄ simulation")
-        self.page(Plot("mc_rates"), [f"b decays: data / simulation {RI['ratio_bdecay']:.2f} in the b jets, {RS['ratio_bdecay']:.2f} outside the tt̄ jets",
-                                     f"prompt J/ψ outside the tt̄ jets: data <b>{RS['data_prompt'][0]:.0f}</b>, simulation {RS['mc_prompt'][0]:.0f} (hadronisation only)",
-                                     f"tt̄ simulation only: the non-tt̄ backgrounds are not yet included (ℓ + jets events: data / simulation {EV['mujets']['ratio']:.2f}, {EV['ejets']['ratio']:.2f})"], wait=9.0)
+                                        "→ a b-decay shape for each category"], wait=8.0)
+        bc = BTM["cats"]
+        self.set_head(6, "A b-decay shape per category, from the simulation")
+        self.page(Plot("mc_btmpl_shapes"), [f"the fit's own b-decay model on the true b decays of each category: short-decay share f = <b>{bc['inb']['f']:.2f}</b> in b jets, <b>{bc['signal']['f']:.2f}</b> outside the tt̄ jets, <b>{bc['ttj']['f']:.2f}</b> in the vetoed jets",
+                                            "outside the tt̄ jets the b decays look like those of b jets: no prompt-like part",
+                                            f"λ calibrated on the data b jets (× {BS['btemplate']['lam_ratio']:.2f}); used by every fit"], wait=9.0)
+        self.set_head(6, "Data against the simulation: tt̄ + backgrounds" if HAS_BKG else "Data against the tt̄ simulation")
+        self.page(Plot("mc_rates"), [f"b decays: data / simulation {RI['data_nonprompt'][0] / simp(RI, 'b decay'):.2f} in the b jets, {RS['data_nonprompt'][0] / simp(RS, 'b decay'):.2f} outside the tt̄ jets",
+                                     f"prompt J/ψ outside the tt̄ jets: data <b>{RS['data_prompt'][0]:.0f}</b>, simulation {simp(RS, 'prompt'):.0f} (hadronisation only)",
+                                     (f"with single top, W + jets, tt̄V and dibosons (QCD too few simulated events to stack): selected events data / simulation {EV['mujets']['ratio_all']:.2f}, {EV['ejets']['ratio_all']:.2f}, {EV['emu']['ratio_all']:.2f} (μ + jets, e + jets, e μ)"
+                                      if HAS_BKG else f"tt̄ simulation only (ℓ + jets events: data / simulation {EV['mujets']['ratio']:.2f}, {EV['ejets']['ratio']:.2f})")], wait=9.0)
         self.page(Plot("chan_rates"), ["outside the tt̄ jets, per channel: the same pattern in μ + jets, e + jets and e μ"], wait=6.0, out=False)
         self.clear()
 
     # ------------------------------------------------------------------------------------------------ 8. toy closure
     def toys(self):
-        a, b = TCP[("mc", 100)], TCP[("datalike", 100)]
+        a, b = TCPB[("mc", 100)], TCPB[("datalike", 100)]  # per-category template
+        c, d = TCP[("mc", 100)], TCP[("datalike", 100)]  # b-jet template
+        lx = [q["lxy"]["bias"] for q in TCPB.values()]
 
         def biases(p):
             return " · ".join(f"{n} {s0(p[k]['bias'], sign=True)}" for k, n in (("lxy", "ℓ<sub>xy</sub>"), ("fit2d", "2D"), ("unbinned", "unbinned"), ("unbinned_global", "one resolution")))
 
-        self.set_head(7, "Which fit model: toy closure, b jets as simulated")
-        self.page(Plot("mc_toys_mc"), ["data-sized toys drawn from the simulation, a known number of prompt J/ψ injected, the whole chain run on each",
-                                       f"fit − truth at {a['unbinned']['truth']:.0f} true: {biases(a)}"], wait=8.0)
-        self.set_head(7, "Which fit model: toy closure, prompt J/ψ in b jets as in data")
-        self.page(Plot("mc_toys_datalike"), [f"prompt J/ψ also in the b jets, 5% of the b decays as in data: fit − truth at {b['unbinned']['truth']:.0f} true: {biases(b)}",
-                                             "the ℓ<sub>xy</sub> fit is low in both; the mass × ℓ<sub>xy</sub> fits move with what the b jets contain",
-                                             "→ the b-decay template is the key systematic, and the spread of the fits in data is expected"], wait=9.0, out=False)
+        self.set_head(7, "Which fit model: toy closure")
+        self.page(Plot("mc_toys_btmpl_mc"), [f"toys of the data's size drawn from the simulation (per channel, category and sign), 0–150 prompt J/ψ injected, the whole chain on each, {a['n']} per point",
+                                             f"per-category b-decay shape, fit − truth at {a['unbinned']['truth']:.0f} true: {biases(a)}",
+                                             f"the ℓ<sub>xy</sub> fit runs low by {s0(-max(lx))}–{s0(-min(lx))}"], wait=9.0)
+        self.set_head(7, "Which b-decay shape: what if the b jets hold prompt J/ψ?")
+        self.page(Plot("mc_toys_tmplcmp_unbinned"), [f"prompt J/ψ added to the b jets, 5% of their b decays: the share that looks prompt in data b jets",
+                                                     f"b-jet shape: unbinned fit − truth {s0(c['unbinned']['bias'], sign=True)} → <b>{s0(d['unbinned']['bias'], sign=True)}</b>: it copies that share onto the signal's b decays",
+                                                     f"per-category shape: {s0(a['unbinned']['bias'], sign=True)} and {s0(b['unbinned']['bias'], sign=True)} (one resolution: {s0(a['unbinned_global']['bias'], sign=True)}, {s0(b['unbinned_global']['bias'], sign=True)}) of {a['unbinned']['truth']:.0f}",
+                                                     f"→ proposed nominal: the unbinned fit with the per-category shape, <b>{NP_B:.0f} <sup>+{NPB_HI:.0f}</sup><sub>−{NPB_LO:.0f}</sub> ({F_B['signif_prompt']:.1f}σ)</b> instead of {NP_U:.0f} ± {NPE_U:.0f} (statistical)"],
+                  wait=11.0, out=False)
         self.clear()
 
     # ------------------------------------------------------------------------------------------------ 9. DPS, interpretation
@@ -837,11 +864,15 @@ class TtJpsi(Scene):
     # ------------------------------------------------------------------------------------------------ 10. generators
     def generators(self):
         self.set_head(9, "Generators and tunes (preliminary)")
-        g = {k: GR[f"{k}|signal"]["r"] for k in ("Pythia 8 CP5", "CP5 CR1", "CP5 CR2", "CP5 ERD on")}
+        g = {k: GR[f"{k}|signal"]["r"] for k in ("Pythia 8 CP5", "CP5 CR1", "CP5 CR2", "CP5 ERD on", "MG5 MLM", "aMC@NLO FxFx") if f"{k}|signal" in GR}
+        mg = " · ".join(f"{n} {g[k]:.3f}" for k, n in (("MG5 MLM", "MadGraph MLM"), ("aMC@NLO FxFx", "aMC@NLO FxFx")) if k in g)
+        # Sherpa: one lepton charge (l+), x 2 against POWHEG + Pythia 8 (both charges), b-decay J/psi in b jets per luminosity
+        sh = 2.0 * GV["gen"]["Sherpa"]["inb_bdecay"][0] / GV["gen"]["Pythia 8 CP5"]["inb_bdecay"][0] if "Sherpa" in GV["gen"] else None
         self.page(Plot("mcvar_ratio", xlabel="tt̄ sample (ℓ + jets)"),
                   [f"prompt / b-decay J/ψ within each sample, no normalisation: data <b>{GR['data|signal']['r']:.2f}</b> outside the tt̄ jets, {GR['data|inb']['r']:.3f} in b jets",
-                   f"Pythia 8 CP5 {g['Pythia 8 CP5']:.3f}; colour reconnection CR1 {g['CP5 CR1']:.3f}, CR2 {g['CP5 CR2']:.3f}, ERD {g['CP5 ERD on']:.3f}; Sherpa: no prompt J/ψ (upper limits)",
-                   "every sample falls short: the comparison is sensitive to the modelling of quarkonium production and fragmentation"], wait=10.0, out=False)
+                   f"POWHEG + Pythia 8 CP5 {g['Pythia 8 CP5']:.3f}; colour reconnection CR1 {g['CP5 CR1']:.3f}, CR2 {g['CP5 CR2']:.3f}, ERD {g['CP5 ERD on']:.3f}" + (f"; {mg}" if mg else ""),
+                   "Sherpa (default, AHADIC): no prompt J/ψ (upper limits)" + (f"; it selects as many tt̄ events per luminosity as POWHEG but has {100 * (1 - sh):.0f}% fewer b-decay J/ψ in b jets (its own b-hadron decays)" if sh else ""),
+                   "every sample falls short: the comparison is sensitive to the modelling of quarkonium production and fragmentation"], wait=11.0, out=False)
         self.clear()
 
     # ------------------------------------------------------------------------------------------------ 11. summary
@@ -849,11 +880,11 @@ class TtJpsi(Scene):
         self.set_head(10, "Summary and next steps")
         n_all = float(f"{MASS['all']['Ns']:.2g}")
         b = self.bullets([f"≈ {n_all:.0f} J/ψ in {NTT_ALL / 1e6:.1f}M tt̄ events, mostly from b-hadron decays: the b-fragmentation reference ({MASS['inb_pv']['Ns']:.0f} in the b jets of the top decays)",
-                          f"prompt J/ψ separated from all top-decay jets: <b>{NP_U:.0f} ± {NPE_U:.0f}, {F_U['signif_prompt']:.1f}σ</b>; R = ({RATE * 1e6:.1f} ± {RATE_E * 1e6:.1f}) × 10<sup>−6</sup> per selected tt̄ event (statistical)",
-                          f"about {min(RES):.0f}–{max(RES):.0f} of them may still be top-decay products; the tt̄ simulation alone predicts {RS['mc_prompt'][0]:.0f}",
+                          f"prompt J/ψ separated from all top-decay jets: <b>{NP_B:.0f} <sup>+{NPB_HI:.0f}</sup><sub>−{NPB_LO:.0f}</sub>, {F_B['signif_prompt']:.1f}σ</b> with the per-category b-decay shape (proposed nominal, toy closure; {NP_U:.0f} ± {NPE_U:.0f} with the b-jet shape); R = ({RATE_B * 1e6:.1f} ± {RATE_BE * 1e6:.1f}) × 10<sup>−6</sup> per selected tt̄ event (statistical)",
+                          f"about {min(RES):.0f}–{max(RES):.0f} of them may still be top-decay products; the simulation predicts {simp(RS, 'prompt'):.0f}" + (" (tt̄ + backgrounds)" if HAS_BKG else ""),
                           "tt̄ events: a common framework for b fragmentation and for prompt quarkonium formation in QCD radiation",
                           "generator comparisons are sensitive to the modelling of quarkonium production and fragmentation"], 22, 12.6, buff=0.3)
-        nx = para("<b>Next:</b> differential z<sub>J/ψ</sub> in the top-decay b jets · prompt rates in the additional-jet categories · category-dependent decay-length models · non-tt̄ backgrounds · more generator variants", 21, 12.6)
+        nx = para("<b>Next:</b> differential z<sub>J/ψ</sub> in the top-decay b jets · prompt rates in the additional-jet categories · systematic uncertainties of the fit model · the residual top-decay J/ψ · dilepton generator samples", 21, 12.6)
         col = VGroup(b, nx).arrange(DOWN, aligned_edge=LEFT, buff=0.5)
         col.move_to([-6.4 + col.width / 2, 2.75 - col.height / 2, 0])
         for x in b:
