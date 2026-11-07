@@ -161,13 +161,22 @@ D.SLIDES.append(("cover", f"""<section id="cover" class="slide div d0" style="ga
                  "decays. Same data (the merged run5 + run5b pass), same fits. The 6 Nov conclusions that the prompt J/psi are harder than inclusive J/psi and "
                  "recoil against the ttbar came from the J/psi in W-decay jets and do not hold for this signal."))
 
-# --- the animation (anim/ttjpsi_story.py, Manim)
-content("story", "Overview · animation", "The analysis in 90 seconds",
-        '<div style="display:flex;justify-content:center"><video controls preload="metadata" src="@ASSET@/anim/ttjpsi_story.mp4" '
-        'style="width:1152px;height:648px;border-radius:12px;box-shadow:0 1px 4px rgba(20,33,61,.14);background:#F7F6F2"></video></div>',
-        notes="anim/ttjpsi_story.py (Manim Community 0.19; render: manim -qh ttjpsi_story.py TtJpsiStory). The event, the jets and the decay sketches are "
-              "illustrative; the l_xy histogram and the simulated shapes are schematic (Gaussian and exponential with the fitted yields and lambda); every number "
-              "in it is read from splot.json, mc_compare.json and mc_template.json except the 76 vetoed prompt J/psi of the unbinned fit.")
+# --- motivation (the framing of the draft letter)
+MB = FJ["mass"]["inb_pv"]
+mrow = [["1 · non-prompt J/ψ in the top-decay b jets", "t → W b, b → H<sub>b</sub> + X, H<sub>b</sub> → J/ψ X: b-quark fragmentation, b-hadron mix and decays (the reference)",
+         f"{MB['Ns']:.0f} ± {MB['Ns_err']:.0f} J/ψ in b jets"],
+        ["2 · prompt J/ψ in additional jets", "quarkonium formation in the QCD radiation of the t̅t (light, c, b, gluon jets)", f"{SP_INJET:.0f} of the prompt signal (sWeights)"],
+        [f"3 · prompt J/ψ away from every top-decay jet", "inclusive associated production: radiation in the hard scattering, residual top-decay products, double parton scattering",
+         f"{SP_NP:.0f} ± {SP_NPE:.0f}, {SPF['signif_prompt']:.1f}σ"]]
+content("motivation", "Motivation", "t̅t events as a laboratory for heavy-flavour fragmentation and quarkonium formation in QCD radiation",
+        ul(["<b>Quarkonium</b> is the hardest case of heavy-quark hadronization: the roles of the production mechanisms, and how parton showers implement them (NRQCD in Pythia 8, LETO), are open",
+            "<b>J/ψ in jets</b> add the momentum share z = p<sub>T</sub>(J/ψ)/p<sub>T</sub>(jet) and the surrounding activity (CMS J/ψ-in-jet measurement, NRQCD fragmenting jet functions)",
+            f"<b>In t̅t</b> every top gives an identifiable energetic b quark and the extra radiation gives light, charm, b and gluon jets: one well-measured hard process, several quarkonium environments"], "b s")
+        + table(["Category", "what it probes", "this deck"], mrow, widths=[28, 50, 22], num=(), hl=(2,)),
+        notes="Framing of the draft letter 'Quarkonium production and heavy-flavor fragmentation in top quark pair events in pp collisions at 13.6 TeV': non-prompt J/psi from "
+              "b-hadron decays in the top-decay b jets as the fragmentation reference (also used by CMS for m_t from m(J/psi, l) at 8 TeV); prompt J/psi in additional jets as "
+              "quarkonium in QCD radiation; prompt J/psi away from all top-decay jets as the inclusive associated-production category, with single and double parton "
+              "scattering not separated in a model-dependent way. Heavy-flavour radiation in ttbar also matters for ttH(bb) and ttbb.")
 
 # --- the definition
 crow = []
@@ -356,33 +365,72 @@ content("sim-ttj", "Simulation · vetoed jets", f"In the vetoed jets the b-decay
               f"{TTJ_RF['nb_pred']:.0f} expected, {TTJ_RF['N_b']:.0f} +- {TTJ_RF['N_b_err']:.0f} fitted; free: {TF_FREE['N_b']:.0f} +- {TF_FREE['N_b_err']:.0f}. "
               f"Closure of the binned fit on the simulation: {MTF['closure']['ttj_ljets']['N_p']:.0f} +- {MTF['closure']['ttj_ljets']['N_p_err']:.0f} for {MTF['closure']['ttj_ljets']['truth_prompt']:.0f} true.")
 
-# --- the toy closure of the fits (toy_closure.py -> toy_summary.py)
-if os.path.exists(os.path.join(D.HERE, "toy_closure.json")):
-    TCS = J("toy_closure.json")
-    TCP = {(p_["scenario"], p_["inject"]): p_ for p_ in TCS["points"]}
-    TFN = (("lxy", "ℓ<sub>xy</sub>"), ("fit2d", "2D"), ("unbinned", "unbinned"), ("unbinned_global", "unbinned, 1 res."))
-
-    def tb(sc, k, inj=100):
-        q = TCP.get((sc, inj))
-        return f"{q[k]['bias']:+.0f} ± {q[k]['bias_err']:.0f} ({q[k]['pull_mean']:+.1f} / {q[k]['pull_width']:.2f})" if q else "–"
-
-    trow = [[nm, tb("mc", k), tb("datalike", k)] for k, nm in TFN]
-    q100 = TCP.get(("mc", 100)) or TCP.get(("datalike", 100))
-    U1, U2 = TCP.get(("mc", 100)), TCP.get(("datalike", 100))
-    ttl = ("Toy closure: the ℓ<sub>xy</sub> fit is low by a quarter; the unbinned fit is off by "
-           + (f"{U1['unbinned']['bias']:+.0f} or {U2['unbinned']['bias']:+.0f} at {U1['unbinned']['truth']:.0f} true, as the b jets hold no or data-like prompt J/ψ" if U1 and U2 else "a constant set by the b-jet content"))
-    content("sim-toys", "Simulation · toy closure", ttl,
-            f'<div class="row" style="gap:36px"><div class="fig">{F("mc_toys_mc", "b jets as simulated", 0.62)}</div>'
-            f'<div class="fig">{F("mc_toys_datalike", "prompt J/ψ in b jets as in data", 0.62)}</div><div class="col">'
-            + table(["fit − truth (pull)", "b jets as simulated", "as in data"], trow, widths=[28, 36, 36], num=(1, 2), hl=(2,))
-            + "</div></div>"
-            + ul([f"<b>Toys:</b> data-sized draws from the {TB} simulation, 0–150 truth-prompt J/ψ added outside the {TB} jets, the chain of the data, {q100['n'] if q100 else ''} toys per point; table at 100 injected",
-                  "<b>Reading:</b> the ℓ<sub>xy</sub> fit is low, more so with more signal; the m × ℓ<sub>xy</sub> fits are offset by a constant whose sign follows whether the b jets' prompt-like share is a b-decay feature (as the fits assume) or real prompt J/ψ"], "b s"),
+# --- the b-decay template: pT or the b tag?
+if "bshape_pt" in MCC:
+    BSP = MCC["bshape_pt"]
+    content("sim-bpt", "Simulation · b-decay template", f"The b-jet template misses the signal's short b decays because of the b tag, not pT (reweighting to the signal's pT: χ<sup>2</sup> {BSP['inb']['chi2_vs_signal']:.0f} → {BSP['inb_rew']['chi2_vs_signal']:.0f})",
+            f'<div class="row" style="gap:44px"><div class="fig">{F("mc_bshape_pt", "MC truth b decays, per p<sub>T</sub> bin", 0.68)}</div>'
+            f'<div class="fig">{F("mc_bshape_rew", "MC truth b decays, unit area per mm", 0.68)}</div></div>'
+            + ul([f"<b>p<sub>T</sub></b> ({BSP['inb']['median_pt']:.0f} vs {BSP['signal']['median_pt']:.0f} GeV median): the pseudo-proper ℓ<sub>xy</sub> keeps the tail, and the ℓ<sub>xy</sub> error is the same at equal p<sub>T</sub> (per candidate in the unbinned fit)",
+                  "<b>The b tag:</b> at equal p<sub>T</sub>, more short b decays outside the t̅t jets than in tagged b jets (4–6× in the untagged vetoed jets): hence a b-decay shape per category from the simulation (next slide)"], "b s"),
             t="mc",
-            notes="toy_closure.py (hadw/toys_closure/toys.jsonl), toy_summary.py: per toy the candidates of each stratum (channel, category, sign, lifetime class) drawn without replacement "
-                  "from the simulation in the numbers of the data, n_inj ~ Poisson truth-prompt J/psi of the simulation (all categories, primary vertex) added outside the ttbar jets; "
-                  "'as in data': prompt J/psi also added to the b jets, 5% of their b decays. Truth = injected + the simulation's own prompt J/psi among the drawn signal candidates "
-                  "(full mass range; window - sidebands for the l_xy fit). Pull = (fit - truth) / the fit's error.")
+            notes="mc_compare.py bshape_pt: MC truth b decays in the J/psi window per category and pT(J/psi) bin: share at |l_xy| < 0.06 mm, mean l_xy - 0.1 mm beyond 0.1 mm, "
+                  "median l_xy error; the b-jet shape reweighted in pT(J/psi) to the signal's b decays against the signal's own (chi2 with the signal's statistical errors).")
+
+# --- the b-decay template per category (btemplate_mc.py; the fits with TTJ_BTEMPLATE -> btmpl/)
+if os.path.exists(os.path.join(D.HERE, "btmpl", "splot.json")) and os.path.exists(os.path.join(D.HERE, "btemplate.json")):
+    BTM = J("btemplate.json")
+    BS = J("btmpl/splot.json")
+    BL, BJ2 = J("btmpl/fit_lxy.json"), J("btmpl/fit_jpsi.json")
+    BN, BNM = BS["fits"]["notb"], BS["fits"]["notb"]["NP_minos"]
+    BT_T, BT_TM = BS["fits"]["ttj"]["N"][0], BS["fits"]["ttj"]["NP_minos"]
+    BC = BTM["cats"]
+    B_LXY = BL["params"]["fp_notb"] * BL["params"]["N_notb"]
+    content("sim-btmpl", "Simulation · b-decay template",
+            f"Per-category b-decay shape (outside the {TB} jets: no {100 * FPI_D:.1f}% prompt-like share as in the data b jets): "
+            f"{BN['N'][0]:.0f} <sup>+{BNM[1]:.0f}</sup><sub>−{-BNM[0]:.0f}</sub> prompt J/ψ ({BN['signif_prompt']:.1f}σ), was {SP_NP:.0f} ± {SP_NPE:.0f}",
+            f'<div class="row" style="gap:44px"><div class="fig">{F("mc_btmpl_shapes", "MC truth b decays, unit area per mm", 0.68)}</div>'
+            f'<div class="fig">{F("mc_btmpl_data", "data, both templates", 0.68)}</div></div>'
+            + ul([f"<b>Template:</b> the fit's b-decay model (f G + (1 − f) e<sup>−ℓ/λ</sup> ⊗ G, G per candidate) on the MC truth b decays per category: "
+                  f"f {BC['inb']['f']:.3f} (b jets), {BC['signal']['f']:.3f} ± {BC['signal']['f_err']:.3f} (outside), {BC['ttj']['f']:.2f} ± {BC['ttj']['f_err']:.2f} (vetoed); λ × data / sim. of the b jets",
+                  f"<b>Data:</b> every fit up by about 20 (ℓ<sub>xy</sub> {B_LXY:.0f}, 2D {BJ2['lt2d']['samples']['notb']['N_P']:.0f}); vetoed jets {BT_T:.0f} ± {0.5 * (BT_TM[1] - BT_TM[0]):.0f} "
+                  f"(simulation-template refit {ST_C:.0f} ± {ST_CE:.0f}); which template is right: the toys"], "b s"),
+            t="mc",
+            notes="btemplate_mc.py: unbinned fit of the MC truth b decays (opposite sign, N_b >= 1, |z0| < 0.1 cm, J/psi window, -0.5 < l_xy < 1.5 mm) per category with the model "
+                  "of splot_prompt.py, S free. The fits (fit_lxy.py, fit_jpsi.py, splot_prompt.py) with TTJ_BTEMPLATE=btemplate.json use f and lambda of the category, lambda "
+                  "scaled by lambda(b jets, data) / lambda(b jets, simulation) of the same fit; the b-jet category keeps its free prompt-like share. Outputs in btmpl/; "
+                  "the nominal outputs are unchanged.")
+
+# --- the toy closure of the fits (toy_closure.py -> toy_summary.py): b-jet template (toy_closure.json), per-category template
+# (toy_closure_btmpl.json); the toys drawn per mass region (the earlier draws per lifetime class biased the b decays)
+TOYS = {v: J(fn) for v, fn in (("bjet", "toy_closure.json"), ("cat", "toy_closure_btmpl.json")) if os.path.exists(os.path.join(D.HERE, fn))}
+TFN = (("lxy", "ℓ<sub>xy</sub>"), ("fit2d", "binned 2D"), ("unbinned", "unbinned"), ("unbinned_global", "unbinned, 1 res."))
+if len(TOYS) == 2:
+    TCP = {(v, p_["scenario"], p_["inject"]): p_ for v, T_ in TOYS.items() for p_ in T_["points"]}
+
+    def tb(v, sc, k, inj=100):
+        q = TCP.get((v, sc, inj))
+        return f"{q[k]['bias']:+.0f} ± {q[k]['bias_err']:.0f}" if q else "–"
+
+    trow = [[nm] + [tb(v, sc, k) for v in ("bjet", "cat") for sc in ("mc", "datalike")] for k, nm in TFN]
+    q100 = TCP.get(("bjet", "mc", 100))
+    U = {(v, sc): TCP.get((v, sc, 100)) for v in ("bjet", "cat") for sc in ("mc", "datalike")}
+    ttl = ("Toy closure at " + (f"{q100['unbinned']['truth']:.0f}" if q100 else "100") + " true prompt J/ψ, unbinned fit − truth: "
+           + ", ".join(f"{U[(v, sc)]['unbinned']['bias']:+.0f}" for v in ("bjet", "cat") for sc in ("mc", "datalike") if U[(v, sc)])
+           + " (b-jet template; per category: b jets as simulated, prompt in b jets)")
+    content("sim-toys", "Simulation · toy closure", ttl,
+            f'<div class="row" style="gap:36px"><div class="fig">{F("mc_toys_tmplcmp_unbinned", "unbinned fit", 0.62)}</div>'
+            f'<div class="fig">{F("mc_toys_tmplcmp_fit2d", "binned 2D fit", 0.62)}</div><div class="col">'
+            + table(["fit − truth", "b-jet t., sim.", "b-jet t., data-like", "per cat., sim.", "per cat., data-like"], trow, widths=[20, 20, 20, 20, 20], num=(1, 2, 3, 4), hl=(2,))
+            + "</div></div>"
+            + ul([f"<b>Toys:</b> the data's candidate count per channel, category, sign and mass region drawn from the {TB} simulation, 0–150 truth-prompt J/ψ added outside the {TB} jets, "
+                  f"the chain of the data, {q100['n'] if q100 else ''} toys per point (table: 100 injected); data-like: prompt J/ψ also in the b jets, 5% of their b decays",
+                  "<b>Earlier toys withdrawn:</b> they drew the data's count per ℓ<sub>xy</sub> class, which gave the simulated b decays the data's ℓ<sub>xy</sub> spectrum (≈ 50 extra short b decays per toy outside the t̅t jets)"], "b s"),
+            t="mc",
+            notes="toy_closure.py (hadw/toys_closure_v2, hadw/toys_closure_v2_btmpl with TTJ_BTEMPLATE), toy_summary.py: per toy the candidates of each stratum (channel, category, "
+                  "sign, mass region) drawn without replacement from the simulation in the numbers of the data; n_inj ~ Poisson truth-prompt J/psi of the simulation (all categories, "
+                  "primary vertex) added outside the ttbar jets. Truth = injected + the simulation's own prompt J/psi among the drawn signal candidates (full mass range; window - "
+                  "sidebands for the l_xy fit). Pull = (fit - truth) / the fit's error. The withdrawn toys (hadw/toys_closure) stratified by lifetime class.")
 
 EVR = {ch: MCC["events"][ch]["ratio"] for ch in ("mujets", "ejets", "emu")}
 LAM_D, LAM_M = FJ["lt2d"]["params"]["lam_inb"], MFJ["lt2d"]["params"]["lam_inb"]
@@ -636,12 +684,12 @@ content("bk-sim", "Backup · simulation", f"The vetoed category against the simu
               f"closure of the binned fit on the simulation: {MTF['closure']['signal_all']['N_p']:.0f} ± {MTF['closure']['signal_all']['N_p_err']:.0f} for {MTF['closure']['signal_all']['truth_prompt']:.0f} true"], "b s"),
         alt=True)
 
-if os.path.exists(os.path.join(D.HERE, "toy_closure.json")):
-    PF = [(n, c) for n, c in (("mc_toypulls_mc", "b jets as simulated"), ("mc_toypulls_datalike", "prompt J/ψ in b jets as in data"))
-          if os.path.exists(os.path.join(D.HERE, "figs", n + ".json"))]
-    if PF:
-        content("bk-toys", "Backup · toy closure", "Pulls of the prompt fits at 100 injected prompt J/ψ",
-                '<div class="row" style="gap:44px">' + "".join(f'<div class="fig">{F(n, c, 0.7)}</div>' for n, c in PF) + "</div>", alt=True)
+if len(TOYS) == 2:
+    for v, nm_ in (("", "b-jet template"), ("_btmpl", "per-category template")):
+        PF = [(f"mc_toys{v}_mc", "fitted against true, b jets as simulated"), (f"mc_toypulls{v}_mc", "pulls at 100 injected")]
+        if all(os.path.exists(os.path.join(D.HERE, "figs", n + ".json")) for n, _ in PF):
+            content(f"bk-toys{v}", "Backup · toy closure", f"Toys with the {nm_}: every fit against the truth, and the pulls",
+                    '<div class="row" style="gap:44px">' + "".join(f'<div class="fig">{F(n, c, 0.7)}</div>' for n, c in PF) + "</div>", alt=True)
 
 content("refs", "References", "References",
         '<ol class="refs">'

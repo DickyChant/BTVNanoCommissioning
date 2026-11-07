@@ -2,7 +2,8 @@
 # Data against the CMS ttbar simulation (Summer24 TTtoLNu2Q + TTto2L2Nu, POWHEG + Pythia8 CP5; pass hadw/out_mc5, cluster 897589,
 # the code of the data pass run5): build_ttJ.py summaries (MC by cross section; and MC as pseudo-data, TTJ_AS_DATA=1), candidate
 # tables (dump_cands.py, sumw.json) -> assoc_veto.py -> the data chain on the MC as pseudo-data (life_from_cands.py, fit_lxy.py,
-# fit_jpsi.py, splot_prompt.py; outputs in mc/) for the closure -> mc_compare.py -> figures -> slides.
+# fit_jpsi.py, splot_prompt.py; outputs in mc/) for the closure -> the b-decay shape per category (btemplate_mc.py) and the data
+# fits with it (btmpl/) -> mc_compare.py -> figures -> slides.
 # usage: refresh_mc.sh [step to start from: build|veto|fit|cmp|figs]
 set -e
 D=$(cd "$(dirname "$0")" && pwd)
@@ -12,7 +13,7 @@ REPO=${TTJ_REPO:-$(cd "$D/../../.." 2>/dev/null && pwd)}
 [ -f "$REPO/pixi.toml" ] || { echo "set TTJ_REPO to the BTVNanoCommissioning checkout (its pixi.toml)"; exit 1; }
 source /cvmfs/cms-griddata.cern.ch/cat/sw/pixi/${TTJ_PIXI:-v0.84.0}/setup.sh > /dev/null
 # every step in the analysis environment of pixi.toml (the grid environment plus the fit and plotting packages)
-py() { (cd "$D" && pixi run --manifest-path "$REPO/pixi.toml" -e analysis python "$@"); }
+py() { (cd "$D" && env -u PYTHONHOME -u PYTHONPATH pixi run --manifest-path "$REPO/pixi.toml" -e analysis python "$@"); }
 cd "$D"
 OUT=$H/out_mc5
 MC=$H/mc5
@@ -34,6 +35,13 @@ if step fit; then
   py fit_jpsi.py $MD/results_run3.json $MD/fit_jpsi.json > $MD/fit_jpsi.log 2>&1 || tail -5 $MD/fit_jpsi.log
   SIGNAL=assoc py splot_prompt.py $MC/cands_assoc $MD/fit_jpsi.json $MD/results_run3.json $MD/splot.json $MC/sweights_assoc.parquet > $MD/splot.log 2>&1 || tail -5 $MD/splot.log
   grep -E "^(notb|ttj|inb)" $MD/splot.log || true
+  # the b-decay l_xy shape per category from the MC truth b decays, and the data fits with it (btmpl/; the nominal outputs unchanged)
+  py btemplate_mc.py $MC/cands_assoc $MD/fit_jpsi.json $MD/fit_lxy.json btemplate.json
+  mkdir -p btmpl && cp -p npv.json btmpl/npv.json
+  TTJ_BTEMPLATE=$D/btemplate.json py fit_lxy.py results_run3.json btmpl/fit_lxy.json > btmpl/fit_lxy.log 2>&1 || tail -5 btmpl/fit_lxy.log
+  TTJ_BTEMPLATE=$D/btemplate.json py fit_jpsi.py results_run3.json btmpl/fit_jpsi.json > btmpl/fit_jpsi.log 2>&1 || tail -5 btmpl/fit_jpsi.log
+  TTJ_BTEMPLATE=$D/btemplate.json SIGNAL=assoc py splot_prompt.py $M/cands_assoc btmpl/fit_jpsi.json results_run3.json btmpl/splot.json $M/sweights_assoc_btmpl.parquet \
+    > btmpl/splot.log 2>&1 || tail -5 btmpl/splot.log
 fi
 # the non-ttbar backgrounds next to the ttbar simulation once refresh_bkg.sh has made their tables
 BKG=""; [ -f $H/mcbkg/results_bkg.json ] && BKG=$H/mcbkg/cands_assoc:$H/mcbkg/cands/sumw.json:$H/mcbkg/results_bkg.json

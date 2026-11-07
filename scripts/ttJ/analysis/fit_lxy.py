@@ -17,6 +17,7 @@ and e mu only (e + jets has more not-b-matched J/psi from the primary vertex per
 -> <out.json>: parameters (MINOS errors on f_p), the variations, sideband-subtracted data and the fitted components per bin.
 usage: python3 fit_lxy.py <results.json> <out.json>"""
 import json
+import os
 import sys
 
 import numpy as np
@@ -69,6 +70,10 @@ def nll_bins(s, n, m):
 
 
 DATA = {c: counts(c) for c in CATS}
+# TTJ_BTEMPLATE=<btemplate.json> (btemplate_mc.py): the signal's b-decay shape from the simulation instead of the b-jet shape
+BTJ = os.environ.get("TTJ_BTEMPLATE")
+BT = json.load(open(BTJ)) if BTJ else None
+BT_F, BT_LAM = (BT["cats"]["signal"]["f"], BT["cats"]["signal"]["lam"]) if BT else (0.0, 0.0)
 DATA_C = {c: tuple(coarse(x) for x in DATA[c]) for c in CATS}
 
 
@@ -83,7 +88,9 @@ def fit(tail=(0.0, 3.0), same_lam=False, coarse_bins=False, inb_template=True, c
     def nll(s1, N_inb, fp_inb, lam_inb, N_notb, fp_notb, lam_notb):
         p, d = shapes(s1, lam_inb, tail, e)
         t = nll_bins(N_inb * (fp_inb * p + (1 - fp_inb) * d), *data["inb"])
-        if inb_template:
+        if inb_template and BT:  # the simulated b-decay shape of the signal, lambda scaled by the fitted b-jet lambda / the simulation's
+            d = BT_F * p + (1 - BT_F) * shapes(s1, BT_LAM * lam_inb / BT["lam_ref_lxy"], tail, e)[1]
+        elif inb_template:
             d = fp_inb * p + (1 - fp_inb) * d
         elif not same_lam:
             p, d = shapes(s1, lam_notb, tail, e)
@@ -160,7 +167,7 @@ for name, kw in (("exp", {"inb_template": False}), ("tail", {"tail": (0.2, 3.0)}
 
 # per channel, not b-matched, in the coarse bins: N and f_p free, the b-matched shape fixed from the combined fit
 p, d = shapes(P["s1"], P["lam_inb"], e=EC)
-d = P["fp_inb"] * p + (1 - P["fp_inb"]) * d
+d = (BT_F * p + (1 - BT_F) * shapes(P["s1"], BT_LAM * P["lam_inb"] / BT["lam_ref_lxy"], e=EC)[1]) if BT else (P["fp_inb"] * p + (1 - P["fp_inb"]) * d)
 
 
 def make_nll(n, m):

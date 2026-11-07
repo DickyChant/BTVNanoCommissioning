@@ -13,7 +13,7 @@ REPO=${TTJ_REPO:-$(cd "$D/../../.." 2>/dev/null && pwd)}
 [ -f "$REPO/pixi.toml" ] || { echo "set TTJ_REPO to the BTVNanoCommissioning checkout (its pixi.toml)"; exit 1; }
 source /cvmfs/cms-griddata.cern.ch/cat/sw/pixi/${TTJ_PIXI:-v0.84.0}/setup.sh > /dev/null
 # every step in the analysis environment of pixi.toml (the grid environment plus the fit and plotting packages)
-py() { (cd "$D" && pixi run --manifest-path "$REPO/pixi.toml" -e analysis python "$@"); }
+py() { (cd "$D" && env -u PYTHONHOME -u PYTHONPATH pixi run --manifest-path "$REPO/pixi.toml" -e analysis python "$@"); }
 cd "$D"
 M=$H/run5m
 G=$H/genstudy/ttjpsi

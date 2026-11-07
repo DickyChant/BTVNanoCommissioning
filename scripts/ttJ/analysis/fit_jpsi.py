@@ -18,6 +18,7 @@ summed), following the 2D model of jpsi_eec (scripts/prepare_fit.py): prompt, no
 The unbinned version (per candidate, with the l_xy error) waits for the per-candidate table.
 -> <out.json>   usage: python3 fit_jpsi.py <results.json> <out.json>"""
 import json
+import os
 import sys
 
 import numpy as np
@@ -185,7 +186,17 @@ NPAR = len(PAR)
 TEMPLATE = {"on": True}  # nominal: the b-matched J/psi shape for the not-b-matched b decays (both ttbar b quarks)
 
 
+BTJ = os.environ.get("TTJ_BTEMPLATE")  # btemplate.json: the signal's b-decay shape from the simulation (btemplate_mc.py)
+BT = json.load(open(BTJ)) if BTJ else None
+
+
 def inb_shape(s1, a):
+    """the b-decay template of the not-b-matched J/psi: the b-matched J/psi shape (its prompt-like part included), or with
+    TTJ_BTEMPLATE the simulated shape of the signal's b decays, lambda scaled by the fitted b-jet lambda / the simulation's"""
+    if BT:
+        c = BT["cats"]["signal"]
+        p, d = lshapes(s1, c["lam"] * a[2] / BT["lam_ref_2d"])
+        return c["f"] * p + (1 - c["f"]) * d
     p, d = lshapes(s1, a[2])
     return (a[0] * p + a[1] * d) / max(a[0] + a[1], 1e-9)
 
@@ -242,7 +253,7 @@ z2 = float(np.sqrt(max(2 * (m20.fval - m2.fval), 0)))
 P2 = {k: float(m2.values[k]) for k in names}
 out["lt2d"] = {"lxy_edges": LE.tolist(), "params": P2, "errors": {k: float(m2.errors[k]) for k in names}, "valid": bool(m2.valid),
                "minos": {k: [float(m2.merrors[k].lower), float(m2.merrors[k].upper)] for k in ("NP_notb", "NP_inb")}, "signif_prompt_notb": z2,
-               "S_W": S_W, "S_SB": S_SB, "C_W": C_W, "C_SB": C_SB, "samples": {}, "var_exp": VX}
+               "S_W": S_W, "S_SB": S_SB, "C_W": C_W, "C_SB": C_SB, "samples": {}, "var_exp": VX, "btemplate": BTJ or "b jets"}
 print(f"2D: sigma {1e3 * P2['s1']:.1f} um; valid {m2.valid}; prompt (not b-matched) significance {z2:.1f} sigma")
 for c in ("inb", "notb"):
     a = [P2[f"{p}_{c}"] for p in PAR]

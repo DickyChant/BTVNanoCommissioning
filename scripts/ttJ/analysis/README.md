@@ -19,7 +19,7 @@ pixi run -e analysis --manifest-path <checkout>/pixi.toml python <script> ...
 
 kaleido (PNG / PDF export) uses a Chrome found on the machine; where there is none:
 `pixi run -e analysis python -c "import kaleido; kaleido.get_chrome_sync()"`.
-Other environments: `anim` (Manim, `anim/ttjpsi_story.py`); the gen-level Pythia 8.317 + LETO sample (`genstudy/`) uses the
+Other environments: `anim` (Manim, `anim/ttjpsi.py`); the gen-level Pythia 8.317 + LETO sample (`genstudy/`) uses the
 LCG_110 view (its Pythia python bindings).
 
 ## Configuration
@@ -31,6 +31,8 @@ LCG_110 view (its Pythia python bindings).
 | `TTJ_AUTHOR` | name on the deck cover and footer (default: none) |
 | `TTJ_PREV_SPLOT` | the unbinned fit of the previous deck (the 6 Nov signal definition), quoted on the slides |
 | `FIG_PREVIEW` | directory for PNG previews of every figure (outside the web area); not set: JSON only |
+| `FIG_ONLY` | comma-separated name prefixes: PNG previews only for those figures |
+| `TTJ_BTEMPLATE` | `btemplate.json`: the fits use the per-category b-decay shape (default: the b-jet shape) |
 | `TTJ_PIXI` | pixi version on CVMFS (default v0.84.0) |
 
 ## Running
@@ -63,11 +65,12 @@ pixi run -e analysis --manifest-path $TTJ_REPO/pixi.toml python stage_an.py <an_
 | Pythia 8 + LETO (gen level) | `genstudy/gen_ttjpsi.py` (batch: `genstudy/run_ttjpsi.sh`), `gen_assoc.py`, `gen_leak_z.py`, `gen_cutscan.py`, `gen_compare.py` | `gen_*.json` |
 | data / ttbar simulation, closure, backgrounds | `mc_compare.py` (`TTJ_BKG`), `mc_template_fit.py` | `mc_compare.json`, `mc_template.json` |
 | generators and tunes | `gen_variants.py` | `gen_variants.json` |
-| closure of the prompt fits with toys (data-sized draws from the simulation, injected prompt J/psi, the whole chain per toy) | `toy_closure.py` (`--retry-failed`), `toy_summary.py` | `toys.jsonl`, `toy_closure.json` |
+| b-decay l_xy shape per category (MC truth), the fits with it (`TTJ_BTEMPLATE=btemplate.json`) | `btemplate_mc.py` | `btemplate.json`, `btmpl/` |
+| closure of the prompt fits with toys (the data's candidate count per channel, category, sign and mass region drawn from the simulation, injected prompt J/psi, the whole chain per toy; hours, run by hand) | `toy_closure.py` (`--retry-failed`; with `TTJ_BTEMPLATE` for the per-category template), `toy_summary.py` | `toys.jsonl`, `toy_closure.json`, `toy_closure_btmpl.json` |
 | figures | `make_figs_run3.py`, `make_figs_balance.py`, `make_figs_assoc.py`, `make_figs_gencmp.py`, `make_figs_mc.py`, `make_figs_an.py` (with `cmsdeck.py` on the cms-plotting skill's `cmsplot_plotly.py`) | `figs/*.json` |
 | deck | `build_deck_assoc.py` (with `deck_lib.py`) | `slides.html`, `../index.html` |
 | analysis-note figures | `stage_an.py` | `<an dir>/*.pdf`, `MANIFEST.txt`, `MC_SAMPLES.txt` |
-| animation | `anim/ttjpsi_story.py` (`pixi run -e anim manim render ...`) | `anim/ttjpsi_story.mp4` |
+| animation (the project's stand-alone video, not part of the slides) | `anim/ttjpsi.py` (`pixi run -e anim manim render ...`) | one video at a fixed web location, overwritten on every update |
 
 Cross sections of the simulated samples: `xsec_map.json`. Plotting rules of the project: `.claude/cms-plotting/` at the
 repository root, with the cms-plotting skill (github.com/DickyChant/cms-plotting).

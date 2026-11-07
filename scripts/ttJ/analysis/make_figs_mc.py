@@ -16,6 +16,13 @@ with cmsdeck (the cms-plotting skill's cmsplot_plotly + the deck additions; rule
   figs/mc_toys_{mc,datalike}.json    (toy_closure.json) toy experiments from the simulation with injected prompt J/psi: mean fitted
                                      against true prompt yield per fit; fit - truth
   figs/mc_toypulls_{mc,datalike}.json  pulls of the fits at 100 injected prompt J/psi against a unit Gaussian
+  figs/mc_bshape_pt.json, mc_bshape_rew.json  the b-decay l_xy shape against pT(J/psi) per category (share of short decays, mean
+                                     decay length); the b-jet shape reweighted to the signal's pT against the signal's own; ratios
+  figs/mc_btmpl_shapes.json          (btemplate.json) MC truth b-decay l_xy per category against its fitted model (per-candidate
+                                     resolution) and the b-jet model on the vetoed jets; truth / model
+  figs/mc_btmpl_data.json            the data's prompt J/psi of each fit with the b-jet template and with the per-category template (btmpl/)
+  figs/mc_toys_btmpl_*, mc_toypulls_btmpl_*  the toys with the per-category template (toy_closure_btmpl.json)
+  figs/mc_toys_tmplcmp_{unbinned,fit2d}.json  fit - truth of the toys with both templates in both scenarios; data-like - as simulated
   figs/mcvar_ratio.json              (gen_variants.json) prompt J/psi per b-decay J/psi within each sample (normalisation-free), outside the
                                      ttbar jets and in b jets, against the data; data / generator
   figs/mcvar_{signal,inb}.json       (gen_variants.json) prompt and b-decay J/psi per generator / tune (MC truth, l + jets)
@@ -35,7 +42,7 @@ warnings.filterwarnings("ignore")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from cmsdeck import (CH3, NB1, SERIES, TT, Z0, bin_label, data_points, draw_pull, draw_ratio, fill_between, headroom, label,  # noqa: E402
-                     legend, line, ratio_canvas, save, step, xlabel, ylabel, zero_line)
+                     legend, line, logx, ratio_canvas, save, step, xlabel, ylabel, zero_line)
 
 C = json.load(open(os.path.join(HERE, "mc_compare.json")))
 T = json.load(open(os.path.join(HERE, "mc_template.json")))
@@ -345,12 +352,115 @@ if len(GV["gen"]) > 1:
         ylabel(f, "J/ψ", chars=5)
         legend(f, f"{LJ_SEL}; {where}<br>{SIMN}")
         save(f, f"mcvar_{cat}")
-# ---- the toy closure of the fits: mean fitted against true prompt yield, fit - truth
-TCJ = os.path.join(HERE, "toy_closure.json")
-if os.path.exists(TCJ):
-    TC = json.load(open(TCJ))
-    FITC = (("lxy", "ℓ<sub>xy</sub> fit", SERIES["s3"], "square"), ("fit2d", "binned 2D fit", SERIES["comb"], "diamond"),
-            ("unbinned", "unbinned fit", SERIES["data"], "circle"), ("unbinned_global", "unbinned fit, one resolution", SERIES["s4"], "triangle-up"))
+# ---- the b-decay shape against pT: b jets, other ttbar jets, outside the ttbar jets (MC truth)
+if "bshape_pt" in C:
+    BP_ = C["bshape_pt"]
+    pe = np.asarray(BP_["pt_edges"], float)
+    pc_ = np.sqrt(pe[1:] * pe[:-1])
+    CATB = (("inb", "b jets", SERIES["s1"], "circle"), ("ttj", f"other {TT} jets (vetoed)", SERIES["s3"], "square"), ("signal", f"outside the {TT} jets", SERIES["s2"], "diamond"))
+    f, ax, axr = ratio_canvas()
+    for j, (k, nm, col, sym) in enumerate(CATB):
+        r = BP_[k]
+        ok = np.array(r["n"]) >= 30
+        x = pc_ * (1 + 0.03 * (j - 1))
+        data_points(f, x[ok], np.array(r["short"])[ok], np.array(r["short_err"])[ok], label=f"{nm} (median p<sub>T</sub> {r['median_pt']:.0f} GeV)", color=col, symbol=sym)
+        if k != "inb":
+            rb = BP_["inb"]
+            okb = ok & (np.array(rb["n"]) >= 30)
+            draw_ratio(f, axr, x[okb], np.array(r["short"])[okb], np.array(r["short_err"])[okb], np.array(rb["short"])[okb], np.array(rb["short_err"])[okb],
+                       ylab="/ b jets", rng=(0, 6), color=col, symbol=sym, band=(k == "signal"))
+    logx(f, 6, 100, ticks=(6, 8, 10, 15, 20, 30, 50, 100))
+    f.update_layout(yaxis=dict(range=[0, 0.95]))
+    label(f, rlabel="13.6 TeV", sim=True)
+    ylabel(f, "share of b decays at |ℓ<sub>xy</sub>| &lt; 0.06 mm", chars=4)
+    xlabel(f, "p<sub>T</sub>(J/ψ) [GeV]")
+    legend(f, f"{TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}")
+    save(f, "mc_bshape_pt")
+    # the b-jet shape reweighted to the signal's pT spectrum, against the signal's own
+    LB = np.asarray(BP_["lxy_edges"], float)
+    lw, lc = np.diff(LB), 0.5 * (LB[1:] + LB[:-1])
+    ps_, es_ = (np.asarray(BP_["signal"][k], float) for k in ("shape", "shape_err"))
+    f, ax, axr = ratio_canvas()
+    for k, nm, col, dash in (("inb", "b jets", SERIES["s1"], None), ("inb_rew", "b jets, reweighted to the signal's p<sub>T</sub>", SERIES["comb"], "dash")):
+        pk = np.asarray(BP_[k]["shape"], float)
+        step(f, LB, pk / lw, col, f"{nm} (χ<sup>2</sup> {BP_[k]['chi2_vs_signal']:.0f} / {len(lc)})", dash=dash, width=2.0)
+        draw_ratio(f, axr, lc, ps_, es_, pk, None, lo=LB[0], hi=LB[-1], xlab=XL, ylab=f"outside {TT} jets / b jets", rng=(0, 4), color=col,
+                   symbol="circle" if k == "inb" else "square", band=(k == "inb"))
+    data_points(f, lc, ps_ / lw, es_ / lw, label=f"outside the {TT} jets", ex=lw / 2, color=SERIES["s2"])
+    headroom(f, float(np.max(ps_ / lw)), factor=1.5)
+    label(f, rlabel="13.6 TeV", sim=True)
+    ylabel(f, "fraction / mm", chars=4)
+    legend(f, f"{TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}")
+    save(f, "mc_bshape_rew")
+
+# ---- the per-category b-decay templates (btemplate_mc.py -> btemplate.json): MC truth b decays against the fitted model of
+# each category, and the b-jet model on the vetoed jets' candidates
+BTJ_ = os.path.join(HERE, "btemplate.json")
+BT = json.load(open(BTJ_)) if os.path.exists(BTJ_) else None
+CATB2 = (("inb", "b jets", SERIES["s1"], "circle"), ("ttj", f"other {TT} jets (vetoed)", SERIES["s3"], "square"), ("signal", f"outside the {TT} jets", SERIES["s2"], "diamond"))
+if BT and "edges" in BT:
+    EB = np.asarray(BT["edges"], float)
+    wb, cbt = np.diff(EB), 0.5 * (EB[1:] + EB[:-1])
+    f, ax, axr = ratio_canvas()
+    for j, (k, nm, col, sym) in enumerate(CATB2):
+        q = BT["cats"][k]
+        h, mo = np.asarray(q["hist"], float), np.asarray(q["model"], float)
+        n = h.sum()
+        step(f, EB, np.maximum(mo / n / wb, 1e-6), col, None, width=1.6)
+        if k == "ttj":
+            step(f, EB, np.maximum(np.asarray(q["model_bjet"], float) / n / wb, 1e-6), col, "b-jet model, vetoed jets' ℓ<sub>xy</sub> errors", dash="dash", width=1.6)
+        x = cbt + (j - 1) * 0.15 * wb
+        ok = h > 0
+        data_points(f, x[ok], (h / n / wb)[ok], (np.sqrt(h) / n / wb)[ok],
+                    label=f"{nm}: f<sub>short</sub> {q['f']:.2f}, λ {q['lam']:.2f} mm", color=col, symbol=sym)
+        draw_ratio(f, axr, x[ok], h[ok], np.sqrt(h)[ok], mo[ok], None, lo=EB[0], hi=EB[-1], xlab=XL, ylab="truth / model", rng=(0, 2.5), color=col,
+                   symbol=sym, band=(j == 0))
+    line(f, [None], [None], "grey", "lines: the fitted model of each category", width=1.6)
+    f.update_layout(yaxis=dict(type="log", range=[-4.3, 4.3], tickvals=[1e-3, 1e-2, 0.1, 1, 10, 100], ticktext=["0.001", "0.01", "0.1", "1", "10", "100"],
+                               minor=dict(showgrid=False, ticks="")))
+    label(f, rlabel="13.6 TeV", sim=True)
+    ylabel(f, "fraction / mm", chars=4)
+    legend(f, f"{TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}; model: f G + (1 − f) e<sup>−ℓ/λ</sup> ⊗ G, G per candidate")
+    save(f, "mc_btmpl_shapes")
+
+# ---- the data fits with the b-jet template and with the per-category template (btmpl/: the fits with TTJ_BTEMPLATE)
+BTD = os.path.join(HERE, "btmpl")
+
+
+def prompt_yields(d):
+    """prompt J/psi of each fit, [value, error]: l_xy, binned 2D, unbinned, unbinned with one resolution, vetoed jets (unbinned)"""
+    L_, J_, S_ = (json.load(open(os.path.join(d, n))) for n in ("fit_lxy.json", "fit_jpsi.json", "splot.json"))
+    p_, e_, s2 = L_["params"], L_["errors"], J_["lt2d"]["samples"]["notb"]
+    return [[p_["fp_notb"] * p_["N_notb"], e_["fp_notb"] * p_["N_notb"]], [s2["N_P"], s2["fp_err"] * (s2["N_P"] + s2["N_NP"])],
+            [S_["fits"]["notb"]["N"][0], S_["fits"]["notb"]["N_err"][0]], [S_["fits"]["notb_globalres"]["N"][0], S_["fits"]["notb_globalres"]["N_err"][0]],
+            [S_["fits"]["ttj"]["N"][0], S_["fits"]["ttj"]["N_err"][0]]]
+
+
+if os.path.exists(os.path.join(BTD, "splot.json")):
+    Y0, Y1 = np.array(prompt_yields(HERE)), np.array(prompt_yields(BTD))
+    xf = np.arange(len(Y0), dtype=float)
+    f, ax, axr = ratio_canvas()
+    for Y, dx, col, sym, nm in ((Y0, -0.1, SERIES["data"], "circle", "b-decay template: the data b jets"),
+                                (Y1, 0.1, SERIES["s1"], "square", "per category from the simulation, λ from the data b jets")):
+        data_points(f, xf + dx, Y[:, 0], Y[:, 1], label=nm, color=col, symbol=sym)
+    draw_ratio(f, axr, xf + 0.1, Y1[:, 0], Y1[:, 1], Y0[:, 0], Y0[:, 1], edges=np.append(xf - 0.5, xf[-1] + 0.5), xlab="", ylab="per cat. / b jets",
+               rng=(0.4, 1.6), color=SERIES["s1"], symbol="square")
+    f.update_xaxes(range=[-0.6, len(xf) - 0.4], tickvals=list(xf), tickangle=0,
+                   ticktext=["ℓ<sub>xy</sub> fit", "binned 2D", "unbinned", "unbinned,<br>1 resolution", "vetoed jets,<br>unbinned"])
+    headroom(f, float(np.max(Y0[:, 0] + Y0[:, 1])), factor=1.7)
+    label(f)
+    ylabel(f, "prompt J/ψ", chars=4)
+    legend(f, f"{SEL}<br>prompt J/ψ outside the {TT} jets (last: in the vetoed {TT} jets)", x=0.03, xanchor="left")
+    save(f, "mc_btmpl_data")
+
+# ---- the toy closure of the fits: mean fitted against true prompt yield, fit - truth; with the b-jet template (toy_closure.json)
+# and with the per-category template (toy_closure_btmpl.json)
+FITC = (("lxy", "ℓ<sub>xy</sub> fit", SERIES["s3"], "square"), ("fit2d", "binned 2D fit", SERIES["comb"], "diamond"),
+        ("unbinned", "unbinned fit", SERIES["data"], "circle"), ("unbinned_global", "unbinned fit, one resolution", SERIES["s4"], "triangle-up"))
+TOYV = {"": ("toy_closure.json", "b-decay template: data b jets"), "_btmpl": ("toy_closure_btmpl.json", "b-decay template per category")}
+TCV = {v: json.load(open(os.path.join(HERE, fn))) for v, (fn, _) in TOYV.items() if os.path.exists(os.path.join(HERE, fn))}
+for var, TC in TCV.items():
+    tmpl = TOYV[var][1]
     for sc, what in (("mc", "b jets as simulated (no prompt J/ψ)"), ("datalike", "prompt J/ψ in b jets as in data (5% of b decays)")):
         pts = [p_ for p_ in TC["points"] if p_["scenario"] == sc]
         if not pts:
@@ -371,8 +481,9 @@ if os.path.exists(TCJ):
         ylabel(f, "mean fitted prompt J/ψ", chars=4)
         ylabel(f, "fit − truth", ax=axr)
         xlabel(f, "true prompt J/ψ outside the t̅t jets (mean per point)")
-        legend(f, f"toys from the {TT} simulation, data-sized, injected prompt J/ψ<br>{what}; {pts[0]['n']} toys per point; bars: toy spread", x=0.03, xanchor="left")
-        save(f, f"mc_toys_{sc}")
+        legend(f, f"toys from the {TT} simulation, data-sized, injected prompt J/ψ<br>{what}; {tmpl}<br>{pts[0]['n']} toys per point; bars: toy spread",
+               x=0.03, xanchor="left")
+        save(f, f"mc_toys{var}_{sc}")
         # the pulls at the injected 100 J/psi against a unit Gaussian
         P100 = next((p_ for p_ in pts if p_["inject"] == 100), None)
         if P100 and "pull_hist" in P100["unbinned"]:
@@ -391,8 +502,35 @@ if os.path.exists(TCJ):
             headroom(f, max(max(P100[k]["pull_hist"]) for k, _, _, _ in FITC), factor=2.4)
             label(f, rlabel="13.6 TeV", sim=True)
             ylabel(f, f"toys / {pw:g}", chars=3)
-            legend(f, f"toys from the {TT} simulation, {P100['inject']} prompt J/ψ injected (true {P100['unbinned']['truth']:.0f})<br>{what}; {n_} toys")
-            save(f, f"mc_toypulls_{sc}")
+            legend(f, f"toys from the {TT} simulation, {P100['inject']} prompt J/ψ injected (true {P100['unbinned']['truth']:.0f})<br>{what}; {n_} toys<br>{tmpl}")
+            save(f, f"mc_toypulls{var}_{sc}")
+# the two templates side by side: fit - truth in both scenarios; lower panel: the scenario dependence (data-like - as simulated)
+if len(TCV) == 2:
+    for k, nm in (("unbinned", "unbinned fit"), ("fit2d", "binned 2D fit")):
+        f, ax, axr = ratio_canvas()
+        top = 0.0
+        for j, (var, col) in enumerate((("", SERIES["data"]), ("_btmpl", SERIES["s1"]))):
+            P_ = {(p_["scenario"], p_["inject"]): p_[k] for p_ in TCV[var]["points"]}
+            for sc, sym, scn in (("mc", "circle", "b jets as simulated"), ("datalike", "square-open", "prompt in b jets as in data")):
+                pts = sorted((q for (s_, _), q in P_.items() if s_ == sc), key=lambda q: q["truth"])
+                x = np.array([q["truth"] for q in pts]) + (j - 0.5) * 3 + (0 if sc == "mc" else 1.5)
+                data_points(f, x, [q["bias"] for q in pts], [q["bias_err"] for q in pts], label=f"{TOYV[var][1]}; {scn}", color=col, symbol=sym)
+                top = max(top, max(abs(q["bias"]) + q["bias_err"] for q in pts), max(q["truth"] for q in pts))
+            inj = sorted({i for (s_, i) in P_ if (("mc", i) in P_ and ("datalike", i) in P_)})
+            dd = [P_[("datalike", i)]["bias"] - P_[("mc", i)]["bias"] for i in inj]
+            de = [np.hypot(P_[("datalike", i)]["bias_err"], P_[("mc", i)]["bias_err"]) for i in inj]
+            data_points(f, np.array([P_[("mc", i)]["truth"] for i in inj]) + (j - 0.5) * 3, dd, de, label=None, ax=axr, color=col, symbol="diamond", size=3)
+        zero_line(f)
+        zero_line(f, axr)
+        bmax = max(abs(q[k]["bias"]) + q[k]["bias_err"] for T_ in TCV.values() for q in T_["points"])
+        f.update_layout(yaxis=dict(range=[-1.3 * bmax, 2.4 * bmax]), yaxis2=dict(range=[-60, 30]))
+        f.update_xaxes(range=[0, 1.1 * top])
+        label(f, rlabel="13.6 TeV", sim=True)
+        ylabel(f, f"{nm}: fit − truth", chars=4)
+        ylabel(f, "data-like − sim.", ax=axr)
+        xlabel(f, f"true prompt J/ψ outside the {TT} jets (mean per point)")
+        legend(f, f"toys from the {TT} simulation, data-sized, injected prompt J/ψ; error: of the mean", x=0.03, xanchor="left")
+        save(f, f"mc_toys_tmplcmp_{k}")
 
 # ---- prompt per b-decay J/psi within each sample: does not depend on the normalisation of the sample
 if "ratio" in GV and len(GV["gen"]) > 1:

@@ -121,16 +121,32 @@ def decay_c(e, lam, s):
 
 NPI, NNPI = P2["NP_inb"], P2["NNP_inb"]
 FPI = NPI / (NPI + NNPI)
+# TTJ_BTEMPLATE=<btemplate.json> (btemplate_mc.py): the b-decay shape of each category from the simulation (short share f and
+# decay length lambda of its MC truth b decays), lambda scaled by lambda(b jets, this dataset) / lambda(b jets, the simulation)
+# of the 2D fit; otherwise the b-jet shape (its prompt-like share FPI included) for every category
+BTJ = os.environ.get("TTJ_BTEMPLATE")
+BT = json.load(open(BTJ)) if BTJ else None
+LAMR = P2["lam_inb"] / BT["lam_ref_2d"] if BT else 1.0
+
+
+def bmix(cat):
+    """(short share, decay length) of the b-decay shape of a category"""
+    if BT and cat in ("notb", "ttj"):
+        c = BT["cats"]["signal" if cat == "notb" else "ttj"]
+        return c["f"], c["lam"] * LAMR
+    return (0.0 if cat in ("inb", "pileup") else FPI), P2["lam_inb"]
 
 
 # l_xy pdfs given the resolution s of each candidate (an array): prompt, non-prompt (cat), continuum; and their CDFs
 def lpdfs(x, s, cat, fn, fw, sw, lb):
-    npr = decay_l(x, P2["lam_inb"], s) if cat in ("inb", "pileup") else FPI * gaus_l(x, s) + (1 - FPI) * decay_l(x, P2["lam_inb"], s)
+    f_, lam_ = bmix(cat)
+    npr = f_ * gaus_l(x, s) + (1 - f_) * decay_l(x, lam_, s)
     return gaus_l(x, s), npr, fn * gaus_l(x, s) + (1 - fn) * (fw * gaus_l(x, sw) + (1 - fw) * decay_l(x, lb, s))
 
 
 def lcdfs(e, s, cat, fn, fw, sw, lb):
-    npr = decay_c(e, P2["lam_inb"], s) if cat in ("inb", "pileup") else FPI * gaus_c(e, s) + (1 - FPI) * decay_c(e, P2["lam_inb"], s)
+    f_, lam_ = bmix(cat)
+    npr = f_ * gaus_c(e, s) + (1 - f_) * decay_c(e, lam_, s)
     return gaus_c(e, s), npr, fn * gaus_c(e, s) + (1 - fn) * (fw * gaus_c(e, sw) + (1 - fw) * decay_c(e, lb, s))
 
 
@@ -140,7 +156,8 @@ def lcdfs(e, s, cat, fn, fw, sw, lb):
 # "global": one Gaussian of the binned fit (sigma = s1 of fit_jpsi.json) for all candidates, as a cross-check
 SP = ("prompt", "nonprompt", "cont")
 OUT = {"selection": "opposite sign, N_b >= 1, |z0| < 0.1 cm, 2.6 < m < 3.6 GeV, -0.5 < l_xy < 1.5 mm", "signal": SIGNAL, "fits": {}, "hists": {}, "check": {},
-       "resolution": "nominal: S x the l_xy error per candidate (S fitted); variation 'globalres': one Gaussian of the binned fit"}
+       "resolution": "nominal: S x the l_xy error per candidate (S fitted); variation 'globalres': one Gaussian of the binned fit",
+       "btemplate": ({"source": BTJ, "lam_ratio": LAMR, "notb": bmix("notb"), "ttj": bmix("ttj")} if BT else "b jets")}
 SHAPE_PARS = ("k", "fn", "fw", "sw", "lb", "S")
 LIMS = dict(NP=(0, None), NNP=(0, None), NB=(0, None), k=(-10, 10), fn=(0, 1), fw=(0, 1), sw=(0.03, 1.0), lb=(0.01, 5), S=(0.5, 3.0))
 

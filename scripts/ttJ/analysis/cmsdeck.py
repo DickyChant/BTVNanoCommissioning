@@ -78,11 +78,13 @@ def logx(fig, lo, hi, ticks=(3, 5, 7, 10, 15, 20, 30, 50, 100)):
 
 
 def save(fig, name):
-    """figs/<name>.json for the deck; the PNG preview into $FIG_PREVIEW (outside the web area) when set."""
+    """figs/<name>.json for the deck; the PNG preview into $FIG_PREVIEW (outside the web area) when set, only for the names
+    starting with one of $FIG_ONLY (comma-separated) when that is set."""
     os.makedirs(OUT, exist_ok=True)
     fig.write_json(os.path.join(OUT, name + ".json"))
     pv = os.environ.get("FIG_PREVIEW")
-    if pv:
+    only = [o for o in os.environ.get("FIG_ONLY", "").split(",") if o]
+    if pv and (not only or any(name.startswith(o) for o in only)):
         os.makedirs(pv, exist_ok=True)
         fig.write_image(os.path.join(pv, name + ".png"), scale=1.3)
     return name

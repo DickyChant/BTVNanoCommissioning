@@ -156,6 +156,44 @@ for gn, chs in grp.items():
 wq = MC[MC.ch.isin(("mujets", "ejets")) & (MC.jcat == 1) & (MC.truth == 1) & (MC.mass > WIN[0]) & (MC.mass < WIN[1])]
 OUT["wpeak_bdecay"] = float(((wq.tt_mjj > 65) & (wq.tt_mjj < 95)).mean())
 
+# the b-decay l_xy shape against pT(J/psi) per category (MC truth, J/psi window): the share of short decays |l_xy| < 0.06 mm,
+# the mean decay length beyond 0.1 mm, the median l_xy error; and the b-jet shape reweighted to the pT spectrum of the signal's
+# b decays against the signal's own shape (is the b-jet template off because of pT, or because of the b tag?)
+PTB = np.array([6, 8, 10, 13, 17, 22, 30, 45, 100.])
+LEB = np.array([-0.5, -0.1, -0.03, 0, 0.03, 0.06, 0.1, 0.2, 0.3, 0.5, 0.8, 1.5])
+bt = MC[(MC.truth == 1) & (MC.mass > WIN[0]) & (MC.mass < WIN[1])]
+cmb = catmask(bt)
+OUT["bshape_pt"] = {"pt_edges": PTB.tolist(), "lxy_edges": LEB.tolist()}
+for cat in ("inb", "ttj", "signal"):
+    q = bt[cmb[cat]]
+    r = {"n": [], "short": [], "short_err": [], "tail": [], "tail_err": [], "lxyerr_um": []}
+    for lo, hi in zip(PTB[:-1], PTB[1:]):
+        g = q[(q.pt >= lo) & (q.pt < hi)]
+        n = len(g)
+        k = float((g.lxy.abs() < 0.06).mean()) if n else float("nan")
+        tl = g.lxy[g.lxy > 0.1] - 0.1
+        r["n"].append(n)
+        r["short"].append(k)
+        r["short_err"].append(float(np.sqrt(k * (1 - k) / n)) if n else float("nan"))
+        r["tail"].append(float(tl.mean()) if len(tl) else float("nan"))
+        r["tail_err"].append(float(tl.std() / np.sqrt(len(tl))) if len(tl) > 1 else float("nan"))
+        r["lxyerr_um"].append(float(1e3 * g.lxyerr.median()) if n else float("nan"))
+    r["shape"] = (np.histogram(q.lxy, LEB)[0] / max(len(q), 1)).tolist()
+    r["shape_err"] = (np.sqrt(np.histogram(q.lxy, LEB)[0]) / max(len(q), 1)).tolist()
+    r["median_pt"] = float(q.pt.median())
+    OUT["bshape_pt"][cat] = r
+qb, qs = bt[cmb["inb"]], bt[cmb["signal"]]
+hb, hs = np.histogram(qb.pt, PTB)[0], np.histogram(qs.pt, PTB)[0]
+wpt = np.where(hb > 0, (hs / hs.sum()) / np.maximum(hb / hb.sum(), 1e-12), 0.0)
+wb_ = wpt[np.clip(np.digitize(qb.pt, PTB) - 1, 0, len(wpt) - 1)]
+OUT["bshape_pt"]["inb_rew"] = {"shape": (np.histogram(qb.lxy, LEB, weights=wb_)[0] / wb_.sum()).tolist()}
+ps_, es_ = np.asarray(OUT["bshape_pt"]["signal"]["shape"]), np.asarray(OUT["bshape_pt"]["signal"]["shape_err"])
+for k_ in ("inb", "inb_rew"):
+    pk = np.asarray(OUT["bshape_pt"][k_]["shape"])
+    OUT["bshape_pt"][k_]["chi2_vs_signal"] = float((((ps_ - pk) / np.where(es_ > 0, es_, 1)) ** 2).sum())
+print("b-decay shape vs pT: chi2 of the signal's b-decay l_xy shape against the b-jet one", round(OUT["bshape_pt"]["inb"]["chi2_vs_signal"], 1),
+      "and the pT-reweighted b-jet one", round(OUT["bshape_pt"]["inb_rew"]["chi2_vs_signal"], 1), f"({len(LEB) - 1} bins)")
+
 # ---------------- closure: the fit on the MC as pseudo-data against its truth
 if CL:
     # the truth l_xy of the pseudo-data (unweighted, all masses of the fit, as the fit projections) for the closure canvases
