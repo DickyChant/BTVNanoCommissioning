@@ -80,11 +80,14 @@ if os.environ.get("TTJ_BKG"):
         d["proc"] = [next((pn for pn, pre in PROC if ds.startswith(pre)), "other") for ds in d.dataset]
         bk.append(d)
     BK = pd.concat(bk, ignore_index=True)
+    # QCD mu-enriched: its J/psi candidates are a handful of events with weights up to ~200 (a spike, not a shape): reported per
+    # process (bkgproc_QCD) but not stacked; its selected events (NBK, from the summary) are well populated and stay in
+    BKQ, BK = BK, BK[BK.proc != "QCD"]
     NBK = {ch: ntt(BR_, ch, "mc_os_all_ge1b") * LUMI_PB for ch in CH}
 S = pd.read_parquet(SWQ)
 SMP = {"inb": "inb", "ttj": "ttj", "signal": "notb"}
 OUT = {"lxy_edges": LE.tolist(), "pt_edges": PTE.tolist(), "lumi_pb": LUMI_PB, "events": {ch: {"data": NTT_D[ch], "mc": NTT_M[ch], "ratio": NTT_D[ch] / NTT_M[ch], "bkg": NBK[ch], "ratio_all": NTT_D[ch] / (NTT_M[ch] + NBK[ch])} for ch in CH},
-       "bkg_procs": [pn for pn, _ in PROC], "rates": {}, "lxy": {},
+       "bkg_procs": [pn for pn, _ in PROC], "bkg_not_stacked": ["QCD"], "rates": {}, "lxy": {},
        "truth": {}, "pt": {}, "closure": {}}
 grp = {"all": CH, "ljets": ("mujets", "ejets"), "emu": ("emu",), "mujets": ("mujets",), "ejets": ("ejets",)}
 ME = np.linspace(M_LO, M_HI, 41)  # m(mu mu) per category and group: data (all candidates of the fit) against MC by truth
@@ -113,8 +116,10 @@ for gn, chs in grp.items():
             for t, tn in TRUTH.items():
                 w = qb.wd.to_numpy(float)[mb_ & (qb.truth == t).to_numpy()]
                 r[f"bkg_{tn}"] = [float(w.sum()), float(np.sqrt((w ** 2).sum()))]
+            qq = BKQ[BKQ.ch.isin(chs)]
+            mq_ = catmask(qq)[cat]
             for pn, _ in PROC:
-                w = qb.wd.to_numpy(float)[mb_ & (qb.proc == pn).to_numpy() & (qb.truth != 2).to_numpy()]
+                w = qq.wd.to_numpy(float)[mq_ & (qq.proc == pn).to_numpy() & (qq.truth != 2).to_numpy()]
                 r[f"bkgproc_{pn}"] = [float(w.sum()), float(np.sqrt((w ** 2).sum()))]
         OUT["rates"][f"{cat}_{gn}"] = r
         # l_xy, window - sidebands

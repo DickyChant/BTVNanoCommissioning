@@ -40,6 +40,6 @@ if step figs; then
   py gen_leak_z.py $M/gen_table.parquet $M/sweights_assoc.parquet gen_leak_z.json
   py gen_cutscan.py $M/gen_table.parquet $M/sweights_assoc.parquet gen_cutscan.json
   py gen_compare.py $M/gen_table.parquet $M/sweights_assoc.parquet splot.json gen_leak_z.json gen_compare.json > gen_compare.log 2>&1
-  py make_figs_run3.py && py make_figs_balance.py && py make_figs_assoc.py && py make_figs_gencmp.py && py build_deck_assoc.py
+  py make_figs_run3.py && py make_figs_balance.py && py make_figs_assoc.py && py make_figs_gencmp.py && py make_figs_an.py && py build_deck_assoc.py
 fi
 echo "refreshed $(date)"

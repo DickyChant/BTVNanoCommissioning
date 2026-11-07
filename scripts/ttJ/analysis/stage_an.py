@@ -31,7 +31,10 @@ TC, TF = MT["fits"]["ttj_ljets_nbcon"], MT["fits"]["ttj_ljets_w1"]
 SN, SZ, SNC, SZC = (GX["scaled"][k] for k in ("nominal", "z", "nominal_bcorr", "z_bcorr"))
 BP = {s_: BAL["profile"][f"{s_}_excl_all"]["ppar_all_pt"] for s_ in ("prompt", "pileup", "sps", "dps")}
 BF = BAL["fit"]
-MCN = "the CMS ttbar simulation (Summer24 POWHEG + Pythia 8 CP5, full simulation) at sigma(ttbar) x 310 fb-1, no non-ttbar backgrounds"
+HAS_BKG = bool(EV["mujets"].get("bkg"))
+MCN = ("the CMS simulation at sigma x 310 fb-1: ttbar (Summer24 POWHEG + Pythia 8 CP5, full simulation) and the non-ttbar backgrounds (single top, W+jets, "
+       "ttW, ttZ, WW/WZ/ZZ, QCD mu-enriched; no Drell-Yan, no QCD EM-enriched)" if HAS_BKG else
+       "the CMS ttbar simulation (Summer24 POWHEG + Pythia 8 CP5, full simulation) at sigma(ttbar) x 310 fb-1, no non-ttbar backgrounds")
 
 
 def m(k):
@@ -82,7 +85,8 @@ STAGE = [
     ("mc_lxy_signal", "mc_lxy_signal", f"l_xy (window - sidebands) of the signal category, data against {MCN}, stacked by MC truth; lower panel: data / simulation. Data prompt J/psi {RS['data_prompt'][0]:.0f} +- {RS['data_prompt'][1]:.0f} (sPlot) against {RS['mc_prompt'][0]:.0f} in the simulation (hadronisation only); b decays data / simulation {RS['ratio_bdecay']:.2f}."),
     ("mc_lxy_ttj", "mc_lxy_vetoed", f"l_xy (window - sidebands) of the vetoed category, data against {MCN}, by MC truth; lower panel: data / simulation."),
     ("mc_lxy_inb", "mc_lxy_bjet", f"l_xy (window - sidebands) of the b-jet category, data against {MCN}, by MC truth; lower panel: data / simulation. Data prompt-like J/psi {RI['data_prompt'][0]:.0f} +- {RI['data_prompt'][1]:.0f} against {RI['mc_prompt'][0]:.0f} true prompt in the simulation; b decays {RI['ratio_bdecay']:.2f}."),
-    ("mc_rates", "mc_rates", f"J/psi per category, data (sPlot: b decays, prompt) against {MCN} (MC truth); lower panel: data / simulation. Selected events data / simulation {EV['mujets']['ratio']:.2f} (mu+jets), {EV['ejets']['ratio']:.2f} (e+jets), {EV['emu']['ratio']:.2f} (e mu): ~{100 * (1 - 2 / (EV['mujets']['ratio'] + EV['ejets']['ratio'])):.0f}% of l+jets is not ttbar."),
+    ("mc_rates", "mc_rates", f"J/psi per category, data (sPlot: b decays, prompt) against {MCN} (MC truth); lower panel: data / simulation. Selected events data / simulation {EV['mujets']['ratio']:.2f} (mu+jets), {EV['ejets']['ratio']:.2f} (e+jets), {EV['emu']['ratio']:.2f} (e mu): ~{100 * (1 - 2 / (EV['mujets']['ratio'] + EV['ejets']['ratio'])):.0f}% of l+jets is not ttbar"
+     + (f"; data / (ttbar + backgrounds) {EV['mujets']['ratio_all']:.2f}, {EV['ejets']['ratio_all']:.2f}, {EV['emu']['ratio_all']:.2f}." if HAS_BKG else ".")),
     ("chan_rates", "mc_rates_per_channel", f"Prompt and b-decay J/psi outside the ttbar jets per channel, data (sPlot) against {MCN}; lower panel: data / simulation."),
     ("chan_mt", "assoc_mt_per_channel", "m_T(l, pT^miss) of the events with a prompt J/psi outside the ttbar jets (sWeights), mu+jets and e+jets, against the b-decay ones (both channels), unit area; lower panel: prompt / b decay. The e+jets prompt-J/psi events are not at the low m_T of QCD with a fake electron."),
     # ---- the generator comparison (Pythia 8 + LETO, gen level)
@@ -120,6 +124,32 @@ STAGE += [
     ("ttbal_njets", "assoc_ttbal_njets", f"Number of selected jets in the events with a prompt J/psi outside the ttbar jets (sWeights; mean {nj('prompt'):.2f}) against the prompt pileup J/psi ({nj('pileup'):.2f}), the b decays outside the ttbar jets ({nj('nonprompt'):.2f}) and the b-jet J/psi ({nj('inb'):.2f}); lower panel: (prompt - pileup) / sigma."),
     ("ttbal_role", "assoc_ttbal_roles", f"The ttbar role (chi2 fit) of the jet holding the J/psi, l+jets: b-jet J/psi {100 * (RO['b_had'] + RO['b_lep']):.0f}% in a b jet of the fit (hadronic {100 * RO['b_had']:.0f}%, leptonic {100 * RO['b_lep']:.0f}%), {100 * RO['W jet']:.0f}% in a W jet, {100 * RO['extra']:.0f}% in an extra jet; prompt signal J/psi {100 * RP['none']:.0f}% in no jet, {100 * RP['extra']:.0f}% in an extra jet (by construction never in a ttbar jet). Lower panel: prompt / each emulation."),
 ]
+# the per-category b-decay template (btemplate_mc.py, the fits with TTJ_BTEMPLATE in btmpl/) and the toy closure of the fits with both templates
+if os.path.exists(os.path.join(HERE, "btemplate.json")) and os.path.exists(os.path.join(HERE, "btmpl", "splot.json")):
+    BTM, BS = J("btemplate.json"), J(os.path.join("btmpl", "splot.json"))
+    BC, BN = BTM["cats"], BS["fits"]["notb"]
+    STAGE += [("mc_btmpl_shapes", "mc_bdecay_template_per_category",
+               f"l_xy of the MC truth b-decay J/psi per category (b jets, other ttbar jets, outside the ttbar jets), {SEL}, J/psi window, unit area per mm, with the "
+               f"fitted model of each category, f G + (1 - f) exp(-l/lambda) x G with the per-candidate resolution G of the unbinned fit: short share f = {BC['inb']['f']:.3f} "
+               f"(b jets), {BC['signal']['f']:.3f} +- {BC['signal']['f_err']:.3f} (outside), {BC['ttj']['f']:.2f} +- {BC['ttj']['f_err']:.2f} (vetoed); lambda = {BC['inb']['lam']:.3f}, "
+               f"{BC['signal']['lam']:.3f}, {BC['ttj']['lam']:.3f} mm; dashed: the b-jet model with the vetoed candidates' errors. Lower panel: MC truth / model."),
+              ("mc_btmpl_data", "assoc_prompt_yield_both_templates",
+               f"Prompt J/psi of each fit in data with the b-decay template of the data b jets (with their {100 * P['fp_inb']:.1f}% prompt-like share) and with the per-category "
+               f"template from the simulation (lambda scaled by data / simulation of the b jets): unbinned {F['N'][0]:.0f} -> {BN['N'][0]:.0f} +{BN['NP_minos'][1]:.0f} "
+               f"-{-BN['NP_minos'][0]:.0f} ({BN['signif_prompt']:.1f} sigma); last: the vetoed category. Lower panel: per-category / b-jet template.")]
+if os.path.exists(os.path.join(HERE, "toy_closure.json")) and os.path.exists(os.path.join(HERE, "toy_closure_btmpl.json")):
+    TY = {v: {(q["scenario"], q["inject"]): q for q in J(fn)["points"]} for v, fn in (("bjet", "toy_closure.json"), ("cat", "toy_closure_btmpl.json"))}
+
+    def tyb(k):
+        return ", ".join(f"{TY[v][(sc, 100)][k]['bias']:+.0f} +- {TY[v][(sc, 100)][k]['bias_err']:.0f}" for v in ("bjet", "cat") for sc in ("mc", "datalike") if (sc, 100) in TY[v])
+
+    for k, nm in (("unbinned", "unbinned m x l_xy fit"), ("fit2d", "binned m x l_xy fit")):
+        STAGE.append((f"mc_toys_tmplcmp_{k}", f"mc_toys_{k}",
+                      f"Toy closure of the {nm}: toys of the data's size drawn from the CMS ttbar simulation per channel, category and sign, with 0-150 truth-prompt "
+                      f"J/psi of the simulation added outside the ttbar jets, the full chain of the data on each; fitted - true prompt J/psi (mean, error of the mean) "
+                      f"for the b-jet template and the per-category template, with the b jets as simulated or with prompt J/psi added to them (5% of their b decays, "
+                      f"as the prompt-like share in data). At 100 injected: {tyb(k)} (b-jet template: as simulated, prompt in b jets; per category: same). "
+                      f"Lower panel: prompt-in-b-jets minus as-simulated."))
 for c, cn in CHN.items():
     STAGE += [(f"chan_lxyfit_{c}", f"assoc_lxy_fit_{c}", f"l_xy fit of the signal sample, {cn} only (N and f free, the shapes of the combined fit): {ch(c)}. Lower panel: pulls."),
               (f"chan_mass_{c}", f"mc_mass_{c}", f"Dimuon mass of the signal category, {cn}, all l_xy of the fit, data against {MCN} by MC truth; lower panel: data / simulation (continuum: non-ttbar events)."),

@@ -333,6 +333,10 @@ GV = json.load(open(GVJ)) if os.path.exists(GVJ) else {"gen": {}}
 if len(GV["gen"]) > 1:
     gens = list(GV["gen"])
     xg = np.arange(len(gens), dtype=float)
+    # one-lepton-charge samples (Sherpa: l+ only, AHADIC: l- only) x 2 for the comparison with both charges in data
+    QF = np.array([2.0 if len({("Lplus" in ds, "Lminus" in ds) for ds in GV["datasets"].get(g, [])}) == 1 and any(k in ds for ds in GV["datasets"].get(g, []) for k in ("Lplus", "Lminus"))
+                   else 1.0 for g in gens])
+    SHORTV = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
     for cat, where in (("signal", f"J/ψ outside the {TT} jets"), ("inb", "J/ψ in a b jet")):
         f, ax, axr = ratio_canvas()
         for sp, dsp, col, sym, dx, nm in (("bdecay", "nonprompt", SERIES["s1"], "square", -0.12, "b-hadron decay"), ("prompt", "prompt", SERIES["s2"], "circle", 0.12, "prompt J/ψ")):
@@ -341,16 +345,16 @@ if len(GV["gen"]) > 1:
                         line_width=0, layer="below")
             f.add_shape(type="line", xref="x domain", yref="y", x0=0, x1=1, y0=d, y1=d, line=dict(color=SERIES["data"] if sp == "prompt" else col, width=pt2px(1.2), dash="dash"))
             f.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=f"Data (sPlot): {nm}", line=dict(color=SERIES["data"] if sp == "prompt" else col, width=pt2px(1.2), dash="dash")))
-            v = np.array([GV["gen"][g][f"{cat}_{sp}_full"] for g in gens])
+            v = np.array([GV["gen"][g][f"{cat}_{sp}_full"] for g in gens]) * QF[:, None]
             data_points(f, xg + dx, v[:, 0], v[:, 1], label=f"simulation, MC truth: {nm}", color=col, symbol=sym)
             draw_ratio(f, axr, xg + dx, np.full(len(gens), d), np.full(len(gens), ed), v[:, 0], v[:, 1], xlab="", ylab="data / sim.", color=col, symbol=sym,
                        band=(sp == "prompt"))
         f.update_layout(yaxis=dict(type="log", range=[0, 4.6], tickvals=[1, 10, 100, 1000, 1e4], ticktext=["1", "10", "100", "1000", "10<sup>4</sup>"], minor=dict(ticks="", showgrid=False)),
                         yaxis2=dict(type="log", range=[-0.7, 2.0], tickvals=[0.3, 1, 3, 10, 30, 100], ticktext=["0.3", "1", "3", "10", "30", "100"], minor=dict(ticks="", showgrid=False)))
-        f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=gens, tickangle=-35)
+        f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=[SHORTV.get(g, g) for g in gens], tickangle=0)
         label(f)
         ylabel(f, "J/ψ", chars=5)
-        legend(f, f"{LJ_SEL}; {where}<br>{SIMN}")
+        legend(f, f"{LJ_SEL}; {where}<br>{TT} samples at σ × 310 fb<sup>−1</sup> (Sherpa, AHADIC: one lepton charge, × 2); no backgrounds")
         save(f, f"mcvar_{cat}")
 # ---- the b-decay shape against pT: b jets, other ttbar jets, outside the ttbar jets (MC truth)
 if "bshape_pt" in C:
@@ -523,7 +527,7 @@ if len(TCV) == 2:
         zero_line(f)
         zero_line(f, axr)
         bmax = max(abs(q[k]["bias"]) + q[k]["bias_err"] for T_ in TCV.values() for q in T_["points"])
-        f.update_layout(yaxis=dict(range=[-1.3 * bmax, 2.4 * bmax]), yaxis2=dict(range=[-60, 30]))
+        f.update_layout(yaxis=dict(range=[-1.3 * bmax, 1.2 * bmax]), yaxis2=dict(range=[-60, 30]))
         f.update_xaxes(range=[0, 1.1 * top])
         label(f, rlabel="13.6 TeV", sim=True)
         ylabel(f, f"{nm}: fit − truth", chars=4)

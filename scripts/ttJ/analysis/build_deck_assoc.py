@@ -31,6 +31,15 @@ OLD = json.load(open(os.environ.get("TTJ_PREV_SPLOT", os.path.join(D.HERE, "..",
 MCC, MTF, MFJ = J("mc_compare.json"), J("mc_template.json"), J(os.path.join("mc", "fit_jpsi.json"))
 FPI_D = FJ["lt2d"]["params"]["NP_inb"] / (FJ["lt2d"]["params"]["NP_inb"] + FJ["lt2d"]["params"]["NNP_inb"])  # prompt-like share of the data b-jet J/psi
 RS, RI = MCC["rates"]["signal_all"], MCC["rates"]["inb_all"]  # data (sWeights) and simulation (truth) per category, 310 fb^-1
+HAS_BKG = bool(MCC["events"]["mujets"].get("bkg"))  # the non-ttbar simulation is in (refresh_bkg.sh)
+
+
+def simp(r, sp):
+    """the simulation of one species in a rates entry: ttbar + the non-ttbar backgrounds when present"""
+    return r[f"mc_{sp}"][0] + (r[f"bkg_{sp}"][0] if HAS_BKG and f"bkg_{sp}" in r else 0.0)
+
+
+SIMN_T = "the t̅t + background simulation" if HAS_BKG else "the t̅t simulation alone"
 GV = J("gen_variants.json") if os.path.exists(os.path.join(D.HERE, "gen_variants.json")) else {"gen": {}}
 NJOBS = 4872
 REPO = "https://github.com/DickyChant/BTVNanoCommissioning"
@@ -408,41 +417,54 @@ TFN = (("lxy", "ℓ<sub>xy</sub>"), ("fit2d", "binned 2D"), ("unbinned", "unbinn
 if len(TOYS) == 2:
     TCP = {(v, p_["scenario"], p_["inject"]): p_ for v, T_ in TOYS.items() for p_ in T_["points"]}
 
-    def tb(v, sc, k, inj=100):
-        q = TCP.get((v, sc, inj))
-        return f"{q[k]['bias']:+.0f} ± {q[k]['bias_err']:.0f}" if q else "–"
+    def sgn(x):
+        return "0" if round(x) == 0 else f"{x:+.0f}".replace("-", "−")
 
-    trow = [[nm] + [tb(v, sc, k) for v in ("bjet", "cat") for sc in ("mc", "datalike")] for k, nm in TFN]
+    def tb(v, k, inj=100):
+        a, b = TCP.get((v, "mc", inj)), TCP.get((v, "datalike", inj))
+        return f"{sgn(a[k]['bias'])} / {sgn(b[k]['bias'])}" if a and b else "–"
+
+    trow = [[nm, tb("bjet", k), tb("cat", k)] for k, nm in TFN]
     q100 = TCP.get(("bjet", "mc", 100))
     U = {(v, sc): TCP.get((v, sc, 100)) for v in ("bjet", "cat") for sc in ("mc", "datalike")}
-    ttl = ("Toy closure at " + (f"{q100['unbinned']['truth']:.0f}" if q100 else "100") + " true prompt J/ψ, unbinned fit − truth: "
-           + ", ".join(f"{U[(v, sc)]['unbinned']['bias']:+.0f}" for v in ("bjet", "cat") for sc in ("mc", "datalike") if U[(v, sc)])
-           + " (b-jet template; per category: b jets as simulated, prompt in b jets)")
+    def ub(v, sc, k="unbinned"):
+        return sgn(U[(v, sc)][k]['bias']) if U[(v, sc)] else "–"
+
+    ttl = (f"Toys, unbinned fit at {q100['unbinned']['truth']:.0f} true prompt J/ψ: per-category template {ub('cat', 'mc')} / {ub('cat', 'datalike')}, "
+           f"b-jet template {ub('bjet', 'mc')} / {ub('bjet', 'datalike')} (b jets as simulated / with prompt J/ψ)") if q100 else "Toy closure"
     content("sim-toys", "Simulation · toy closure", ttl,
             f'<div class="row" style="gap:36px"><div class="fig">{F("mc_toys_tmplcmp_unbinned", "unbinned fit", 0.62)}</div>'
             f'<div class="fig">{F("mc_toys_tmplcmp_fit2d", "binned 2D fit", 0.62)}</div><div class="col">'
-            + table(["fit − truth", "b-jet t., sim.", "b-jet t., data-like", "per cat., sim.", "per cat., data-like"], trow, widths=[20, 20, 20, 20, 20], num=(1, 2, 3, 4), hl=(2,))
+            + table(["fit − truth (± 2–3)", "b-jet template", "per category"], trow, widths=[36, 32, 32], num=(1, 2), hl=(2,))
+            + '<div class="cap" style="margin-top:8px">b jets as simulated / with prompt J/ψ</div>'
             + "</div></div>"
-            + ul([f"<b>Toys:</b> the data's candidate count per channel, category, sign and mass region drawn from the {TB} simulation, 0–150 truth-prompt J/ψ added outside the {TB} jets, "
-                  f"the chain of the data, {q100['n'] if q100 else ''} toys per point (table: 100 injected); data-like: prompt J/ψ also in the b jets, 5% of their b decays",
-                  "<b>Earlier toys withdrawn:</b> they drew the data's count per ℓ<sub>xy</sub> class, which gave the simulated b decays the data's ℓ<sub>xy</sub> spectrum (≈ 50 extra short b decays per toy outside the t̅t jets)"], "b s"),
+            + ul([f"<b>Toys:</b> the data's candidate count per channel, category and sign drawn from the {TB} simulation, 0–150 truth-prompt J/ψ added outside the {TB} jets, "
+                  f"the data chain, {q100['n'] if q100 else ''} per point (table: 100 injected); data-like: prompt J/ψ in the b jets, 5% of their b decays. The earlier toys (drawn per ℓ<sub>xy</sub> class) are withdrawn",
+                  f"<b>Reading:</b> the b-jet template copies the b jets' prompt-like share onto the signal's b decays, so real prompt J/ψ there cost ≈ {-U[('bjet', 'datalike')]['unbinned']['bias'] if U[('bjet', 'datalike')] else 0:.0f}; "
+                  f"the per-category template closes in both cases (one resolution: {ub('cat', 'mc', 'unbinned_global')} / {ub('cat', 'datalike', 'unbinned_global')}); the ℓ<sub>xy</sub> fit is low by 20–45. "
+                  "Proposed nominal: the unbinned fit with the per-category template"], "b s"),
             t="mc",
             notes="toy_closure.py (hadw/toys_closure_v2, hadw/toys_closure_v2_btmpl with TTJ_BTEMPLATE), toy_summary.py: per toy the candidates of each stratum (channel, category, "
-                  "sign, mass region) drawn without replacement from the simulation in the numbers of the data; n_inj ~ Poisson truth-prompt J/psi of the simulation (all categories, "
+                  "sign) drawn without replacement from the simulation in the numbers of the data; n_inj ~ Poisson truth-prompt J/psi of the simulation (all categories, "
                   "primary vertex) added outside the ttbar jets. Truth = injected + the simulation's own prompt J/psi among the drawn signal candidates (full mass range; window - "
-                  "sidebands for the l_xy fit). Pull = (fit - truth) / the fit's error. The withdrawn toys (hadw/toys_closure) stratified by lifetime class.")
+                  "sidebands for the l_xy fit). Pull = (fit - truth) / the fit's error. The withdrawn toys (hadw/toys_closure) were drawn per lifetime class; draws per mass region "
+                  "(window, sidebands) also fail: the data has more continuum per J/psi, so the sidebands over-subtract.")
 
 EVR = {ch: MCC["events"][ch]["ratio"] for ch in ("mujets", "ejets", "emu")}
 LAM_D, LAM_M = FJ["lt2d"]["params"]["lam_inb"], MFJ["lt2d"]["params"]["lam_inb"]
-content("sim-rates", "Simulation · rates", f"The {TB} simulation alone (backgrounds being processed) matches the b decays ({RI['ratio_bdecay']:.2f}, {RS['ratio_bdecay']:.2f}); its prompt J/ψ: {RS['data_prompt'][0] / RS['mc_prompt'][0]:.0f}× below data outside the {TB} jets",
+EVA = {ch: MCC["events"][ch]["ratio_all"] for ch in ("mujets", "ejets", "emu")}
+content("sim-rates", "Simulation · rates", f"{SIMN_T[0].upper() + SIMN_T[1:]}: b-decay J/ψ data / simulation ({RI['data_nonprompt'][0] / simp(RI, 'b decay'):.2f}, {RS['data_nonprompt'][0] / simp(RS, 'b decay'):.2f} in b jets, outside); its prompt J/ψ {RS['data_prompt'][0] / simp(RS, 'prompt'):.0f}× below data outside the {TB} jets",
         f'<div class="row" style="gap:44px"><div class="fig">{F("mc_rates", "MC truth against sWeights", 0.7)}</div>'
         f'<div class="fig">{F("mc_lxy_inb", "b jets, window − sidebands, per mm", 0.7)}</div></div>'
-        + ul([f"<b>Selected events, data / simulation:</b> {EVR['mujets']:.2f}, {EVR['ejets']:.2f}, {EVR['emu']:.2f} (μ + jets, e + jets, e μ): about {100 * (1 - 1 / (0.5 * (EVR['mujets'] + EVR['ejets']))):.0f}% of ℓ + jets is not {TB}; per luminosity the b decays agree to 10%, λ {LAM_D:.2f} vs {LAM_M:.2f} mm",
+        + ul([(f"<b>Selected events, data / ({TB} + backgrounds):</b> {EVA['mujets']:.2f}, {EVA['ejets']:.2f}, {EVA['emu']:.2f} (μ + jets, e + jets, e μ; {TB} alone {EVR['mujets']:.2f}, {EVR['ejets']:.2f}, {EVR['emu']:.2f}); "
+               f"b-decay J/ψ data / simulation {RI['data_nonprompt'][0] / simp(RI, 'b decay'):.2f} (b jets), {RS['data_nonprompt'][0] / simp(RS, 'b decay'):.2f} (outside), λ {LAM_D:.2f} vs {LAM_M:.2f} mm" if HAS_BKG else
+               f"<b>Selected events, data / simulation:</b> {EVR['mujets']:.2f}, {EVR['ejets']:.2f}, {EVR['emu']:.2f} (μ + jets, e + jets, e μ): about {100 * (1 - 1 / (0.5 * (EVR['mujets'] + EVR['ejets']))):.0f}% of ℓ + jets is not {TB}; per luminosity the b decays agree to 10%, λ {LAM_D:.2f} vs {LAM_M:.2f} mm"),
               f"<b>Prompt J/ψ in the simulation</b> come from hadronisation only (low-mass c c̅ strings): {RS['mc_prompt'][0]:.0f} outside the {TB} jets, {RI['mc_prompt'][0]:.0f} in b jets; its fit finds {CI['fit_prompt']:.0f} in its b jets, so the {RI['data_prompt'][0]:.0f} in data b jets are not b decays"], "b s"),
         t="mc",
         notes="Normalisation: cross section / sum of generator weights x event weight (pileup, lepton and b-tag scale factors) x 310 fb^-1, the 2024 simulation for every year. "
               "Data: the sWeights of the unbinned fit; the vetoed category's data b-decay yield is low because the fit counts its short b decays as prompt (previous slide). "
-              "Colour reconnection (CP5 CR1, CR2), early resonance decays, Sherpa (default, AHADIC) and MadGraph (MLM, FxFx) samples are being processed (cluster 897658).")
+              + ("Backgrounds (hadw/out_bkg, cluster 897661): single top (tW, t-, s-channel), W + jets (MLM, 1-4 jets), ttW, ttZ, WW / WZ / ZZ, QCD mu-enriched; no Drell-Yan "
+                 "(only binned slices without cross sections) and no QCD EM-enriched." if HAS_BKG else "Non-ttbar backgrounds are being processed (cluster 897661)."))
 
 # --- per channel
 CHS3 = (("mujets", "μ + jets"), ("ejets", "e + jets"), ("emu", "e μ"))
@@ -454,28 +476,30 @@ _sbm = ((_mc > 2.6) & (_mc < 2.9)) | ((_mc > 3.3) & (_mc < 3.6))
 def chan(ch):
     """per-channel numbers of the signal category: data, the simulation (310 fb^-1), the l_xy fit of the channel"""
     r, M_, FC = MCC["rates"][f"signal_{ch}"], MCC["mass"][f"signal_{ch}"], FIT["channels"][ch]
-    mct = sum(_np.asarray(M_[f"mc_{t}"][0], float) for t in ("prompt", "b decay", "no J/psi"))
-    return {"ntt": R["channels"][ch]["yields"]["data_os_all_ge1b"]["n_tt"], "ev": MCC["events"][ch]["ratio"], "sp": r["data_prompt"], "sb": r["data_nonprompt"],
-            "mp": r["mc_prompt"][0], "mb": r["mc_b decay"][0], "rb": r["ratio_bdecay"], "lp": FC["N"] * FC["fp"], "fp": FC["fp"], "N": FC["N"],
+    mct = sum(_np.asarray(M_[f"mc_{t}"][0], float) for t in ("prompt", "b decay", "no J/psi")) + (_np.asarray(M_["bkg"][0], float) if HAS_BKG and "bkg" in M_ else 0.0)
+    return {"ntt": R["channels"][ch]["yields"]["data_os_all_ge1b"]["n_tt"], "ev": MCC["events"][ch]["ratio_all" if HAS_BKG else "ratio"], "sp": r["data_prompt"], "sb": r["data_nonprompt"],
+            "mp": simp(r, "prompt"), "mb": simp(r, "b decay"), "rb": r["data_nonprompt"][0] / simp(r, "b decay"), "lp": FC["N"] * FC["fp"], "fp": FC["fp"], "N": FC["N"],
             "cont": float(_np.asarray(M_["data"][0], float)[_sbm].sum() / mct[_sbm].sum())}
 
 
 CHV = {ch: chan(ch) for ch, _ in CHS3}
 crow3 = [[nm, f"{v['ntt'] / 1e6:.2f}M", f"{v['ev']:.2f}", f"{v['cont']:.2f}", f"{v['rb']:.2f}", f"{v['sp'][0]:.0f} ± {v['sp'][1]:.0f}", f"{v['lp']:.0f}", f"{v['mp']:.1f}",
           f"{v['sp'][0] / v['mp']:.1f}"] for (ch, nm), v in zip(CHS3, CHV.values())]
-content("chan-summary", "Channels · summary", f"Against the {TB} simulation alone (no backgrounds yet): b decays agree, prompt J/ψ {CHV['mujets']['sp'][0] / CHV['mujets']['mp']:.0f}×, {CHV['ejets']['sp'][0] / CHV['ejets']['mp']:.0f}×, {CHV['emu']['sp'][0] / CHV['emu']['mp']:.0f}× above (μ + jets, e + jets, e μ)",
+content("chan-summary", "Channels · summary", f"Against {SIMN_T}: b decays {min(v['rb'] for v in CHV.values()):.1f}–{max(v['rb'] for v in CHV.values()):.1f}, prompt J/ψ {CHV['mujets']['sp'][0] / CHV['mujets']['mp']:.0f}×, {CHV['ejets']['sp'][0] / CHV['ejets']['mp']:.0f}×, {CHV['emu']['sp'][0] / CHV['emu']['mp']:.0f}× above (μ + jets, e + jets, e μ)",
         '<div class="row" style="gap:28px"><div class="fig">' + F("chan_rates", "MC truth against sWeights", 0.6) + '</div><div class="fig">' + F("chan_mt", "unit area per GeV", 0.6) + '</div><div class="col">'
-        + ul([f"<b>Backgrounds missing:</b> ℓ + jets has about 20% more selected events than the {TB} simulation and {min(CHV['mujets']['cont'], CHV['ejets']['cont']):.1f}–{max(CHV['mujets']['cont'], CHV['ejets']['cont']):.1f}× the simulated dimuon continuum (sidebands): non-{TB} events (W + jets, QCD)",
+        + ul([(f"<b>With the backgrounds:</b> selected events data / simulation {EVA['mujets']:.2f}, {EVA['ejets']:.2f}, {EVA['emu']:.2f}; the dimuon continuum (sidebands) "
+               f"{min(CHV['mujets']['cont'], CHV['ejets']['cont']):.1f}–{max(CHV['mujets']['cont'], CHV['ejets']['cont']):.1f}× the simulation in ℓ + jets (no Drell-Yan, no QCD EM-enriched simulated)" if HAS_BKG else
+               f"<b>Backgrounds missing:</b> ℓ + jets has about 20% more selected events than the {TB} simulation and {min(CHV['mujets']['cont'], CHV['ejets']['cont']):.1f}–{max(CHV['mujets']['cont'], CHV['ejets']['cont']):.1f}× the simulated dimuon continuum (sidebands): non-{TB} events (W + jets, QCD)"),
               f"<b>e + jets</b>: {1e6 * CHV['ejets']['sp'][0] / CHV['ejets']['ntt']:.1f} ± {1e6 * CHV['ejets']['sp'][1] / CHV['ejets']['ntt']:.1f} prompt J/ψ per 10<sup>6</sup> {TB} against {1e6 * CHV['mujets']['sp'][0] / CHV['mujets']['ntt']:.1f} ± {1e6 * CHV['mujets']['sp'][1] / CHV['mujets']['ntt']:.1f} in μ + jets; its prompt-J/ψ events are not at the low m<sub>T</sub> of QCD with a fake electron (right)"], "b s")
         + "</div></div>"
         + table(["Channel", f"{TB} events", "events / sim.", "continuum / sim.", "b decays / sim.", "prompt, sPlot", "prompt, ℓ<sub>xy</sub> fit", "sim. prompt", "data / sim."], crow3,
                 widths=[12, 10, 11, 12, 12, 12, 11, 10, 10], num=(1, 2, 3, 4, 5, 6, 7, 8), hl=()), t="mc",
-        notes="events / sim.: selected events (opposite-sign J/psi not required) data / ttbar simulation. continuum / sim.: J/psi candidates outside the ttbar jets in the mass sidebands "
+        notes="events / sim.: selected events (opposite-sign J/psi not required) data / simulation (ttbar + the non-ttbar backgrounds when processed; the J/psi columns without QCD mu-enriched, too few simulated events). continuum / sim.: J/psi candidates outside the ttbar jets in the mass sidebands "
               "(2.6-2.9, 3.3-3.6 GeV), data / simulation. b decays / sim.: b-decay sWeights / MC truth. prompt, sPlot: the prompt sWeights of the combined unbinned fit summed per "
               "channel; prompt, l_xy: N x f_prompt of the per-channel l_xy fit (fit_lxy.py, N and f free, the shapes of the combined fit).")
 for ch, nm in CHS3:
     v = CHV[ch]
-    content(f"chan-{ch}", f"Channels · {nm}", f"{nm}: {v['sp'][0]:.0f} ± {v['sp'][1]:.0f} prompt J/ψ outside the {TB} jets (sPlot), {v['lp']:.0f} from the channel's ℓ<sub>xy</sub> fit; the {TB} simulation has {v['mp']:.1f}",
+    content(f"chan-{ch}", f"Channels · {nm}", f"{nm}: {v['sp'][0]:.0f} ± {v['sp'][1]:.0f} prompt J/ψ outside the {TB} jets (sPlot), {v['lp']:.0f} from the channel's ℓ<sub>xy</sub> fit; the simulation has {v['mp']:.1f}",
             '<div class="row" style="gap:28px">'
             + f'<div class="fig">{F(f"chan_mass_{ch}", "all ℓ_xy of the fit", 0.6)}</div>'
             + f'<div class="fig">{F(f"chan_lxyfit_{ch}", "window − sidebands, per mm", 0.6)}</div>'
@@ -494,7 +518,7 @@ if len(GV["gen"]) > 1 and "ratio" in GV:
             return "–"
         if r.get("upper") is not None:
             return f"&lt; {r['upper']:.2g} (0 / {r['n_b']})"
-        return f"{r['r']:.2g} ± {r['err']:.1g} ({r['n_p']} / {r['n_b']})"
+        return f"{r['r']:.2g} ± {r['err']:.1g} <span style=\"color:#6B7482\">({r['n_p']}/{r['n_b']})</span>"
 
     vrow = [[g, rfmt(f"{g}|signal"), rfmt(f"{g}|inb")] for g in gens]
     vrow.append(["<b>Data (sPlot)</b>", f"<b>{GR['data|signal']['r']:.2f} ± {GR['data|signal']['err']:.2f}</b>", f"<b>{GR['data|inb']['r']:.3f} ± {GR['data|inb']['err']:.3f}</b>"])
@@ -502,15 +526,15 @@ if len(GV["gen"]) > 1 and "ratio" in GV:
     content("sim-gen", "Simulation · generators (preliminary)", f"Prompt per b-decay J/ψ outside the {TB} jets: data {GR['data|signal']['r']:.2f}, Pythia CP5 {GR['Pythia 8 CP5|signal']['r']:.3f}"
             + (f", CR1 {CR1['r']:.3f}" if CR1 and CR1.get('upper') is None else "") + "; Sherpa makes none",
             f'<div class="row" style="gap:36px"><div class="fig">{F("mcvar_ratio", "within each sample: normalisation-free", 0.66)}</div><div class="col">'
-            + table(["ℓ + jets sample", f"prompt / b decay, outside {TB} jets (MC events)", "in b jets (MC events)"], vrow, widths=[22, 42, 36], num=(1, 2), hl=(len(vrow) - 1,))
+            + table(["ℓ + jets", f"prompt / b decay, outside {TB} jets", "in b jets"], vrow, widths=[26, 40, 34], num=(1, 2), hl=(len(vrow) - 1,))
             + "</div></div>"
-            + ul([f"<b>Preliminary</b> (AHADIC, MLM, FxFx still running; Sherpa's absolute normalisation under investigation): CR1 about doubles the hadronisation's prompt J/ψ, Sherpa makes none; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above the nominal ratio outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets"], "b s"),
+            + ul([f"<b>Sherpa</b> selects as many {TB} events per luminosity as POWHEG (±1%) but makes ≈ 30% fewer b-decay J/ψ in b jets (15% outside) and no prompt J/ψ; CR1 doubles the hadronisation's prompt J/ψ; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above CP5 outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets (AHADIC partly processed)"], "b s"),
             t="mc",
             notes="gen_variants.py on the l + jets samples processed so far (hadw/out_alt, clusters 897658 and 897660): MC truth prompt J/psi (no b-hadron ancestor) per MC truth "
                   "b-decay J/psi in the selection of the fit, weighted; no prompt J/psi in a sample: 90% CL upper limit 2.3 / (raw b-decay count). Data: prompt / b-decay sWeights, l + jets. "
-                  "Sherpa: the selected candidates carry on average half the sample's mean generator weight. Not the ttbar reweighting of the workflow (one file rerun without it: "
-                  "identical weights); Sherpa's MEPS@NLO weights (13-16% negative) are lower for the selected events. Its absolute yields wait for its selected-event count "
-                  "against the data, so only ratios within a sample are shown.")
+                  "Sherpa: the MEPS@NLO sample over-generates high jet multiplicities with lower weights (mean weight 2.8x the average at 2 jets, 0.5x at 6 jets; 17% negative), "
+                  "so its selected candidates carry about half the mean weight; the weighted selection matches: selected l + jets events per pb within 1% of POWHEG + Pythia "
+                  "(12 Sherpa and 6 POWHEG jobs, nbjet histograms). Its b-decay J/psi per event are about 30% lower in b jets and 15% outside the ttbar jets (Sherpa's own b-hadron decay tables and fragmentation against Pythia 8's; CMS Pythia samples do not use EvtGen); the ratios within a sample are unaffected.")
 
 BTTJ = BAL["profile"]["ttj_excl_all"]["ppar_all_pt"]
 content("balance", "DPS? · p<sub>T</sub> balance", f"The p<sub>T</sub> balance cannot tell a second scattering apart for these soft J/ψ: data {bpp('prompt')} GeV, recoiling {mn(BP['sps']['ppar_all_pt'][0])}, 2nd scattering {mn(BP['dps']['ppar_all_pt'][0])}",
@@ -631,11 +655,15 @@ content("summary", "Summary", "Summary",
         ul([f"<b>Signal:</b> J/ψ ΔR &gt; 0.4 from every jet of the two top decays (b jets, the four {TB} jets of ℓ + jets, the χ² fit jets; e μ: the two b jets)",
             f"<b>Why:</b> the b-jet veto alone kept J/ψ in top-decay jets (a W-pair mass peak); {ST_NP:.0f} of the {OLD_NP:.0f} prompt J/ψ of the 6 Nov deck; Pythia + LETO: {100 * GL['eff']:.0f}% of top-decay J/ψ pass the veto",
             f"<b>Prompt J/ψ outside the {TB} jets:</b> {SP_NP:.0f} ± {SP_NPE:.0f} (unbinned), {N_PR:.0f} (ℓ<sub>xy</sub> fit) in {NTT / 1e6:.1f}M {TB} events: {SR}, statistical only",
-            f"<b>CMS {TB} simulation:</b> the fit closes ({CS['fit_prompt']:.0f} ± {CS['fit_prompt_err']:.0f} for {CS['truth_prompt']:.0f}), b decays fake {mn(CS['fake_prompt_in_data'])} ± {CS['fake_prompt_in_data_err']:.0f}; it has {RS['mc_prompt'][0]:.0f} prompt J/ψ outside the {TB} jets (hadronisation only); its b decays agree to 10%",
+            *([f"<b>Fit model (toys):</b> the b-jet template loses the signal if the b jets' prompt-like share is prompt J/ψ; the per-category template closes to ≈ 5%: "
+               f"{BN['N'][0]:.0f} <sup>+{BNM[1]:.0f}</sup><sub>−{-BNM[0]:.0f}</sub> ({BN['signif_prompt']:.1f}σ), proposed nominal"]
+              if len(TOYS) == 2 and "BN" in globals() else []),
+            f"<b>CMS simulation:</b> the fit closes ({CS['fit_prompt']:.0f} ± {CS['fit_prompt_err']:.0f} for {CS['truth_prompt']:.0f}); {RS['mc_prompt'][0]:.0f} prompt J/ψ outside the {TB} jets (hadronisation only); "
+            f"b decays data / simulation {RS['data_nonprompt'][0] / simp(RS, 'b decay'):.2f}{' with the backgrounds' if HAS_BKG else ''}",
             f"<b>Still top decays:</b> about {RES_LO:.0f}–{RES_HI:.0f} (Pythia leak, normalised to the {ST_C:.0f} ± {ST_CE:.0f} vetoed prompt J/ψ left after their short b decays)",
             f"<b>Second scattering not excluded:</b> soft as inclusive J/ψ; Pythia + LETO gives {SNC['sps_signal']:.0f} ± {SNC['sps_signal_err']:.0f} of the {GD['signal'][0]:.0f} (ℓ + jets), leaving {SNC['dps_left']:.0f} ± {SNC['dps_left_err']:.0f}: σ<sub>eff</sub> ≈ {SNC['sigma_eff_mb']:.0f} mb; no distribution separates",
             f"<b>Withdrawn (6 Nov):</b> the hard spectrum and the recoil against the {TB} came from J/ψ in top-decay jets"])
-        + f'<div class="callout blue"><b>{SR} prompt J/ψ outside the t̅t decay jets (statistical); the fit closes on the CMS {TB} simulation, whose prompt J/ψ are {RS["data_prompt"][0] / RS["mc_prompt"][0]:.0f}× fewer (non-{TB} backgrounds still to add); {RES_LO:.0f}–{RES_HI:.0f} may be top decays.</b> Next: generators and tunes (running), the residual subtraction, a DPS discriminant.</div>')
+        + f'<div class="callout blue"><b>{SR} prompt J/ψ outside the t̅t decay jets (statistical); the fit closes on the CMS {TB} simulation, whose prompt J/ψ are {RS["data_prompt"][0] / simp(RS, "prompt"):.0f}× fewer{" (with the non-" + TB + " backgrounds)" if HAS_BKG else " (non-" + TB + " backgrounds still to add)"}; {RES_LO:.0f}–{RES_HI:.0f} may be top decays.</b> Next: the nominal fit and template (toys), the residual subtraction, a DPS discriminant.</div>')
 
 # --- backup: the vetoed category, region counts
 brow = []

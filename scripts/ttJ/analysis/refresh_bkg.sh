@@ -19,7 +19,7 @@ START=${1:-build}
 mkdir -p $MB
 step() { case "$START" in build) return 0;; veto) [ "$1" != build ];; cmp) [[ "$1" =~ ^(cmp|figs)$ ]];; figs) [ "$1" = figs ];; esac; }
 if step build; then
-  py build_ttJ.py $OUT $MB/results_bkg.json > $MB/build_bkg.log 2>&1 &
+  TTJ_ALL_MC=1 py build_ttJ.py $OUT $MB/results_bkg.json > $MB/build_bkg.log 2>&1 &  # every background dataset with a cross section
   py dump_cands.py $OUT $MB/cands > $MB/dump.log 2>&1
   wait
 fi

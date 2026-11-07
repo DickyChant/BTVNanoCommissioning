@@ -1,11 +1,12 @@
 """Which prompt-J/psi fit closes on the truth? Toy experiments from the CMS ttbar simulation run through the full chain of the
 data (life_from_cands.py -> fit_lxy.py, fit_jpsi.py -> splot_prompt.py), with a known number of prompt J/psi.
 Each toy:
-  - draws, without replacement, the number of candidates of the data in each stratum (channel x category x sign x mass region;
-    category: b jet / other ttbar jet / outside the ttbar jets; mass region: low sideband / window / high sideband / elsewhere)
-    from the simulation's candidate tables (MC truth kept). Not by lifetime class: drawing the data's counts per l_xy class
-    imposes the data's l_xy distribution on the simulated b decays (about 50 extra short b decays per toy outside the ttbar
-    jets, a 4% prompt-like share in the b jets), the quantity the fits measure;
+  - draws, without replacement, the number of candidates of the data in each stratum (channel x category x sign; category:
+    b jet / other ttbar jet / outside the ttbar jets) from the simulation's candidate tables (MC truth kept): the toys have the
+    data's size and the simulation's composition. No stratum in a variable of the fits: the data's counts per l_xy class give
+    the simulated b decays the data's l_xy spectrum (about 50 extra short b decays per toy outside the ttbar jets, a 4%
+    prompt-like share in the b jets), and per mass region (window, sidebands) a continuum under the peak that the sidebands do
+    not describe (the data has more continuum per J/psi: about 100 candidates over-subtracted per toy);
   - injects n_inj truth-prompt J/psi of the simulation (all categories, primary vertex; with replacement) into the signal
     category (J/psi outside the ttbar jets);
   - scenario "datalike" also injects prompt J/psi into the b jets, prompt / b decay = 0.05 as in the data b jets (the
@@ -61,7 +62,7 @@ def load(dd):
 
 
 MC, DA = load(A.mc), load(A.data)
-KEY = ["ch", "grp", "os", "mreg"]  # mass region (mass only): the data's amount of combinatorial background, the l_xy of the simulation
+KEY = ["ch", "grp", "os"]  # not l_xy or mass: the fitted variables keep the shapes of the simulation
 NDATA = DA.groupby(KEY).size()
 STRATA = {k: g.index.to_numpy() for k, g in MC.groupby(KEY)}
 FIT = (MC.os == 1) & (MC.nb >= 1) & (MC.life <= 2) & (MC.lxy > -0.5) & (MC.lxy < 1.5) & (MC.mass > 2.6) & (MC.mass < 3.6)

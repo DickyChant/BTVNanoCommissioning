@@ -36,6 +36,8 @@ OUTDIRS, RES = sys.argv[1:-1], sys.argv[-1]
 _xs = os.environ.get("TTJ_XSEC", os.path.join(HERE, "xsec_map.json"))
 XSEC = json.load(open(_xs)) if os.path.exists(_xs) else {}
 EXTRA = {"TbarWplustoLNu2Q_TuneCP5_13p6TeV_powheg-pythia8": 2.0}  # tW -> l nu qq exists for tbar W+ only: x2 for both charges
+# TTJ_ALL_MC=1: "mc" is every simulated dataset with a cross section (the non-ttbar background pass), not only the PROCS lists
+ALL_MC = os.environ.get("TTJ_ALL_MC") == "1"
 PROCS = {
     "tt_lj": ["TTtoLNu2Q_TuneCP5_13p6TeV_powheg-pythia8"],
     "tt_ll": ["TTto2L2Nu_TuneCP5_13p6TeV_powheg-pythia8"],
@@ -152,9 +154,9 @@ def total(key, which):
         if is_data(ds) or ds not in XSEC:
             continue
         procs = PROCS if which == "mc" else {which: PROCS[which]}
-        if not any(ds in L for L in procs.values()):
+        if not any(ds in L for L in procs.values()) and not (which == "mc" and ALL_MC):
             continue
-        w = XSEC[ds] / sumw[ds] * EXTRA.get(ds, 1.0)
+        w = XSEC[ds] / sumw[ds] * (1.0 if ALL_MC else EXTRA.get(ds, 1.0))  # the background pass has both tW charges
         v, w2 = v + w * d[key][0], w2 + w * w * d[key][1]
     if np.isscalar(v):  # nothing filled yet (no candidate, or no MC): zeros of the histogram shape
         v, w2 = np.zeros(shapes[key]), np.zeros(shapes[key])
