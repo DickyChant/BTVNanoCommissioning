@@ -218,7 +218,7 @@ content("definition", "Signal · definition", f"Signal: the J/ψ {SIG}, i.e. not
 # --- the two kinds of simulation: the CMS samples and our private generator-level Pythia 8 + LETO study
 PILL = "font:500 15px/1 'IBM Plex Mono',monospace;letter-spacing:1px;padding:5px 9px;border-radius:5px;border:1.5px solid;white-space:nowrap;"
 SAMP = [["What", "official CMS samples through the code of the data pass", "our own sample, generated for this study: <b>not a CMS sample</b>"],
-        ["Generators", f"POWHEG + Pythia 8 CP5 (Summer24); CR1, CR2, ERD, Sherpa, AHADIC, MadGraph MLM, aMC@NLO FxFx; single top, W + jets, {TB}V, dibosons, QCD",
+        ["Generators", f"POWHEG + Pythia 8 CP5 (Summer24); CR1, CR2, ERD, Sherpa (default and AHADIC tunes), MadGraph MLM, aMC@NLO FxFx; single top, W + jets, {TB}V, dibosons, QCD",
          f"Pythia 8.317 alone: {TB} ℓ + jets, CP5, {GEN['n_generated'] / 1e6:.0f}M events"],
         ["Prompt J/ψ", f"from hadronisation only, no onia in the shower: {RS['mc_prompt'][0]:.0f} outside the {TB} jets",
          "LETO: onia in the parton shower (colour singlet and octet), LDMEs × 20 for statistics, divided out"],
@@ -490,7 +490,7 @@ content("sim-rates", "CMS simulation · rates", f"{SIMN_T[0].upper() + SIMN_T[1:
         t="cms",
         notes="Normalisation: cross section / sum of generator weights x event weight (pileup, lepton and b-tag scale factors) x 310 fb^-1, the 2024 simulation for every year. "
               "Data: the sWeights of the unbinned fit; the vetoed category's data b-decay yield is low because the fit counts its short b decays as prompt (previous slide). "
-              + ("Backgrounds (hadw/out_bkg, cluster 897661): single top (tW, t-, s-channel), W + jets (MLM, 1-4 jets), ttW, ttZ, WW / WZ / ZZ, QCD mu-enriched; no Drell-Yan "
+              + ("Backgrounds (hadw/out_bkg, cluster 897661, all 1429 jobs; one corrupt input file of QCD 800-1000 skipped, a local rerun of its job): single top (tW, t-, s-channel), W + jets (MLM, 1-4 jets), ttW, ttZ, WW / WZ / ZZ, QCD mu-enriched; no Drell-Yan "
                  "(only binned slices without cross sections) and no QCD EM-enriched." if HAS_BKG else "Non-ttbar backgrounds are being processed (cluster 897661)."))
 
 # --- per channel
@@ -547,7 +547,7 @@ if len(GV["gen"]) > 1 and "ratio" in GV:
             return f"&lt; {r['upper']:.2g} (0 / {r['n_b']})"
         return f"{r['r']:.2g} ± {r['err']:.1g} <span style=\"color:#6B7482\">({r['n_p']}/{r['n_b']})</span>"
 
-    vrow = [[{"Pythia 8 CP5": "POWHEG + Pythia 8 CP5"}.get(g, g), rfmt(f"{g}|signal"), rfmt(f"{g}|inb")] for g in gens]
+    vrow = [[{"Pythia 8 CP5": "POWHEG + Pythia 8 CP5", "Sherpa": "Sherpa, default tune", "Sherpa AHADIC": "Sherpa, AHADIC tune"}.get(g, g), rfmt(f"{g}|signal"), rfmt(f"{g}|inb")] for g in gens]
     vrow.append(["<b>Data (sPlot)</b>", f"<b>{GR['data|signal']['r']:.2f} ± {GR['data|signal']['err']:.2f}</b>", f"<b>{GR['data|inb']['r']:.3f} ± {GR['data|inb']['err']:.3f}</b>"])
     CR1 = GR.get("CP5 CR1|signal")
 
@@ -562,13 +562,13 @@ if len(GV["gen"]) > 1 and "ratio" in GV:
             f'<div class="row" style="gap:36px"><div class="fig">{F("mcvar_ratio", "within each sample: normalisation-free", 0.66)}</div><div class="col">'
             + table(["CMS sample, ℓ + jets", f"prompt / b decay, outside {TB} jets", "in b jets"], vrow, widths=[31, 37, 32], num=(1, 2), hl=(len(vrow) - 1,))
             + "</div></div>"
-            + ul([f"<b>Sherpa</b> selects as many {TB} events per luminosity as POWHEG (±1%) but makes {SHB('Sherpa', 'inb')} fewer b-decay J/ψ in b jets ({SHB('Sherpa', 'signal')} outside; AHADIC {SHB('Sherpa AHADIC', 'inb')}, {SHB('Sherpa AHADIC', 'signal')}) and no prompt J/ψ; CR1 doubles the hadronisation's prompt J/ψ; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above CP5 outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets; e μ with the dilepton samples: backup"], "b s"),
+            + ul([f"<b>Sherpa</b> selects as many {TB} events per luminosity as POWHEG (±1%) but makes {SHB('Sherpa', 'inb')} fewer b-decay J/ψ in b jets ({SHB('Sherpa', 'signal')} outside; AHADIC tune {SHB('Sherpa AHADIC', 'inb')}, {SHB('Sherpa AHADIC', 'signal')}) and no prompt J/ψ; CR1 doubles the hadronisation's prompt J/ψ; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above CP5 outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets; e μ with the dilepton samples: backup"], "b s"),
             t="cms",
             notes="gen_variants.py on the l + jets samples (hadw/out_alt, cluster 897658, all jobs in): MC truth prompt J/psi (no b-hadron ancestor) per MC truth "
                   "b-decay J/psi in the selection of the fit, weighted; no prompt J/psi in a sample: 90% CL upper limit 2.3 / (raw b-decay count). Data: prompt / b-decay sWeights, l + jets. "
                   "Sherpa: the MEPS@NLO sample over-generates high jet multiplicities with lower weights (mean weight 2.8x the average at 2 jets, 0.5x at 6 jets; 17% negative), "
                   "so its selected candidates carry about half the mean weight; the weighted selection matches: selected l + jets events per pb within 1% of POWHEG + Pythia "
-                  "(12 Sherpa and 6 POWHEG jobs, nbjet histograms). Its b-decay J/psi per event are about 30% lower in b jets and 15% outside the ttbar jets (Sherpa's own b-hadron decay tables and fragmentation against Pythia 8's; CMS Pythia samples do not use EvtGen); the ratios within a sample are unaffected.")
+                  "(12 Sherpa and 6 POWHEG jobs, nbjet histograms). Its b-decay J/psi per event are about 30% lower in b jets and 15% outside the ttbar jets (Sherpa's own b-hadron decay tables and fragmentation against Pythia 8's; CMS Pythia samples do not use EvtGen); the ratios within a sample are unaffected. Both Sherpa samples: Sherpa 2.2.15, the same MEPS@NLO setup, AHADIC cluster hadronisation (Sherpa's default: the fragments set no FRAGMENTATION) and Sherpa's own hadron decays; TuneAHADIC only adds 14 AHADIC parameters (strange and baryon fractions, cluster splitting and decay) - McM TOP-RunIII2024Summer24GS-00002 (default, l+) / -00005 (AHADIC tune, l-), dilepton -00004 / -00008.")
 
 BTTJ = BAL["profile"]["ttj_excl_all"]["ppar_all_pt"]
 content("balance", "DPS? · p<sub>T</sub> balance", f"The p<sub>T</sub> balance cannot tell a second scattering apart for these soft J/ψ: data {bpp('prompt')} GeV, recoiling {mn(BP['sps']['ppar_all_pt'][0])}, 2nd scattering {mn(BP['dps']['ppar_all_pt'][0])}",
@@ -761,7 +761,7 @@ if "emu" in GV and GV["emu"]["gen"].get("Pythia 8 CP5") and "data|signal|emu" in
     def erel(g, cat):
         return f"{GE[g][f'{cat}_bdecay'][0] / GN0[f'{cat}_bdecay'][0]:.2f}"
 
-    ESH = {"Pythia 8 CP5": "POWHEG CP5", "CP5 ERD on": "CP5 ERD", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MG5 MLM", "aMC@NLO FxFx": "FxFx"}
+    ESH = {"Pythia 8 CP5": "POWHEG CP5", "CP5 ERD on": "CP5 ERD", "Sherpa": "Sherpa def.", "Sherpa AHADIC": "AHADIC tune", "MG5 MLM": "MG5 MLM", "aMC@NLO FxFx": "FxFx"}
     erow = [[ESH.get(g, g), efmt(f"{g}|signal|emu"), erel(g, "inb"), erel(g, "signal")] for g in GE]
     ED = GV["emu"]["data"]
     erow.append(["<b>Data (sPlot)</b>", f"<b>{GV['ratio']['data|signal|emu']['r']:.2f} ± {GV['ratio']['data|signal|emu']['err']:.2f}</b>",
@@ -774,7 +774,7 @@ if "emu" in GV and GV["emu"]["gen"].get("Pythia 8 CP5") and "data|signal|emu" in
             + "</div></div>", alt=True, t="cms",
             notes="gen_variants.py, emu block: the dilepton samples of each generator (TTto2L2Nu, hadw/out_alt, cluster 897660; the nominal one from hadw/out_mc5) in the e mu "
                   "channel, the selection of the unbinned fit, MC truth; data: the e mu sWeights of the combined unbinned fit. b decays / POWHEG: weighted b-decay J/psi per "
-                  "luminosity against POWHEG + Pythia 8 CP5 (data: the sWeights, without the non-ttbar backgrounds). aMC@NLO FxFx: negative weights leave no net prompt J/psi.")
+                  "luminosity against POWHEG + Pythia 8 CP5 (data: the sWeights, without the non-ttbar backgrounds). aMC@NLO FxFx: negative weights leave no net prompt J/psi. Both Sherpa samples: Sherpa 2.2.15, the same MEPS@NLO setup, AHADIC cluster hadronisation (Sherpa's default: the fragments set no FRAGMENTATION) and Sherpa's own hadron decays; TuneAHADIC only adds 14 AHADIC parameters (strange and baryon fractions, cluster splitting and decay) - McM TOP-RunIII2024Summer24GS-00002 (default, l+) / -00005 (AHADIC tune, l-), dilepton -00004 / -00008.")
 
 if len(TOYS) == 2:
     for v, nm_ in (("", "b-jet template"), ("_btmpl", "per-category template")):

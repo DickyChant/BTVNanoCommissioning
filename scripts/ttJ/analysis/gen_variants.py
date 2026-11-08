@@ -1,11 +1,11 @@
 """Prompt J/psi of the ttbar simulation per generator / tune against the data: is the simulation short of prompt J/psi
 everywhere? None of the samples has onia in the parton shower; their prompt J/psi come from hadronisation (a low-mass
-c c-bar system collapsing into a J/psi: Lund strings in Pythia, clusters in Sherpa AHADIC), so the colour reconnection
+c c-bar system collapsing into a J/psi: Lund strings in Pythia, AHADIC clusters in Sherpa), so the colour reconnection
 and the hadronisation model can change them. Samples (Summer24, NanoAODv15, the code of the data pass; l + jets, each
 normalised to the sigma(ttbar) x BR of the POWHEG sample x 310 fb^-1, one-charge samples x 1/2):
     POWHEG + Pythia 8 CP5 (nominal), CP5 CR1 (QCD-inspired), CP5 CR2 (gluon move), CP5 with early resonance decays (ERD on),
-    Sherpa (default hadronisation), Sherpa AHADIC (cluster), MadGraph5 MLM (up to 3 jets) and aMC@NLO FxFx (up to 2 jets),
-    both with Pythia 8 CP5.
+    Sherpa 2.2.15 with its default tune and with the AHADIC tune (the same MEPS@NLO setup and cluster model, 14 AHADIC
+    parameters retuned), MadGraph5 MLM (up to 3 jets) and aMC@NLO FxFx (up to 2 jets), both with Pythia 8 CP5.
 Per category (b jet: cat 0; other ttbar jet: jcat 1; outside the ttbar jets: jcat >= 2), the selection of the unbinned fit
 (opposite sign, N_b >= 1, |z0| < 0.1 cm, 2.6 < m < 3.6 GeV, -0.5 < l_xy < 1.5 mm): MC truth prompt and b-decay J/psi
 against the data sWeights (l + jets). The data prompt yield in the other ttbar jets is biased by short b decays (closure).

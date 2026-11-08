@@ -334,10 +334,10 @@ GV = json.load(open(GVJ)) if os.path.exists(GVJ) else {"gen": {}}
 if len(GV["gen"]) > 1:
     gens = list(GV["gen"])
     xg = np.arange(len(gens), dtype=float)
-    # one-lepton-charge samples (Sherpa: l+ only, AHADIC: l- only) x 2 for the comparison with both charges in data
+    # one-lepton-charge samples (Sherpa default tune: l+ only, AHADIC tune: l- only) x 2 for the comparison with both charges in data
     QF = np.array([2.0 if len({("Lplus" in ds, "Lminus" in ds) for ds in GV["datasets"].get(g, [])}) == 1 and any(k in ds for ds in GV["datasets"].get(g, []) for k in ("Lplus", "Lminus"))
                    else 1.0 for g in gens])
-    SHORTV = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
+    SHORTV = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa<br>def.", "Sherpa AHADIC": "Sherpa<br>AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
     for cat, where in (("signal", f"J/ψ outside the {TT} jets"), ("inb", "J/ψ in a b jet")):
         f, ax, axr = ratio_canvas()
         ymax = 1.0
@@ -359,7 +359,7 @@ if len(GV["gen"]) > 1:
         f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=[SHORTV.get(g, g) for g in gens], tickangle=0)
         label(f)
         ylabel(f, "J/ψ", chars=5)
-        legend(f, f"{LJ_SEL}; {where}<br>CMS {TT} samples at σ × 310 fb<sup>−1</sup>, no backgrounds<br>Sherpa, AHADIC: one lepton charge, × 2")
+        legend(f, f"{LJ_SEL}; {where}<br>CMS {TT} samples at σ × 310 fb<sup>−1</sup>, no backgrounds<br>Sherpa default and AHADIC tunes: one lepton charge, × 2")
         save(f, f"mcvar_{cat}")
 # ---- the b-decay shape against pT: b jets, other ttbar jets, outside the ttbar jets (MC truth)
 if "bshape_pt" in C:
@@ -567,7 +567,7 @@ if "ratio" in GV and len(GV["gen"]) > 1:
                        xlab="", ylab="data / sim.", color=col, symbol=sym, band=(cat == "signal"))
         f.update_layout(yaxis=dict(type="log", range=[-4.3, 3.0], tickvals=[1e-4, 1e-3, 1e-2, 0.1, 1], ticktext=["10<sup>−4</sup>", "0.001", "0.01", "0.1", "1"], minor=dict(ticks="", showgrid=False)),
                         yaxis2=dict(type="log", range=rr2[0], tickvals=rr2[1], ticktext=[f"{t:g}" for t in rr2[1]], minor=dict(ticks="", showgrid=False)))
-        SHORT = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
+        SHORT = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa<br>def.", "Sherpa AHADIC": "Sherpa<br>AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
         f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=[SHORT.get(g, g) for g in gens], tickangle=0)
         label(f)
         ylabel(f, "prompt J/ψ per b-decay J/ψ", chars=5)
