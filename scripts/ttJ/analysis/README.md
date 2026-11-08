@@ -31,7 +31,7 @@ pixi run -e analysis --manifest-path <checkout>/pixi.toml python <script> ...
 
 kaleido (PNG / PDF export) uses a Chrome found on the machine; where there is none:
 `pixi run -e analysis python -c "import kaleido; kaleido.get_chrome_sync()"`.
-Other environments: `anim` (Manim, `anim/ttjpsi.py`); the private gen-level Pythia 8.317 + LETO sample (`genstudy/`) uses
+Other environments: `anim` (Manim, `anim/ttjpsi.py`); `anim/tts/pixi.toml` for the narration (Kokoro text-to-speech, run locally, and faster-whisper); the private gen-level Pythia 8.317 + LETO sample (`genstudy/`) uses
 the LCG_110 view (its Pythia python bindings).
 
 ## Configuration
@@ -83,6 +83,7 @@ pixi run -e analysis --manifest-path $TTJ_REPO/pixi.toml python stage_an.py <an_
 | deck | `build_deck_assoc.py` (with `deck_lib.py`) | `slides.html`, `../index.html` |
 | analysis-note figures | `stage_an.py` | `<an dir>/*.pdf`, `MANIFEST.txt`, `MC_SAMPLES.txt` |
 | animation (the project's stand-alone video, not part of the slides) | `anim/ttjpsi.py` (`pixi run -e anim manim render ...`) | one video at a fixed web location, overwritten on every update |
+| its narration: the text per segment (`narration()` in the scene, from the same numbers as the frames), speech, mixing, a transcription check | `ttjpsi.py --narration voice/narration.json`, `anim/voice.py` (Kokoro; the scene holds each segment until it is spoken), `anim/mix.py` (voice + subtitles on the joined video), `anim/check_voice.py` (faster-whisper) | `anim/voice/` (not in git), the narrated mp4 and its `.srt` |
 
 Cross sections of the simulated samples: `xsec_map.json`. Plotting rules of the project: `.claude/cms-plotting/` at the
 repository root, with the cms-plotting skill (github.com/DickyChant/cms-plotting).

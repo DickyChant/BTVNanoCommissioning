@@ -1,0 +1,15 @@
+# narration of the animation (anim/voice.py, mix.py, check_voice.py): local text-to-speech (Kokoro, ONNX), faster-whisper, ffmpeg
+[workspace]
+name = "ttjpsi-voice"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+numpy = "*"
+ffmpeg = "*"
+pysoundfile = "*"
+
+[pypi-dependencies]
+kokoro-onnx = ">=0.4.7"
+faster-whisper = ">=1.1"
