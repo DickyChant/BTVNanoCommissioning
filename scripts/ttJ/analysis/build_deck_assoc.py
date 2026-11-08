@@ -562,7 +562,7 @@ if len(GV["gen"]) > 1 and "ratio" in GV:
             f'<div class="row" style="gap:36px"><div class="fig">{F("mcvar_ratio", "within each sample: normalisation-free", 0.66)}</div><div class="col">'
             + table(["CMS sample, ℓ + jets", f"prompt / b decay, outside {TB} jets", "in b jets"], vrow, widths=[31, 37, 32], num=(1, 2), hl=(len(vrow) - 1,))
             + "</div></div>"
-            + ul([f"<b>Sherpa</b> selects as many {TB} events per luminosity as POWHEG (±1%) but makes {SHB('Sherpa', 'inb')} fewer b-decay J/ψ in b jets ({SHB('Sherpa', 'signal')} outside; AHADIC {SHB('Sherpa AHADIC', 'inb')}, {SHB('Sherpa AHADIC', 'signal')}) and no prompt J/ψ; CR1 doubles the hadronisation's prompt J/ψ; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above CP5 outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets"], "b s"),
+            + ul([f"<b>Sherpa</b> selects as many {TB} events per luminosity as POWHEG (±1%) but makes {SHB('Sherpa', 'inb')} fewer b-decay J/ψ in b jets ({SHB('Sherpa', 'signal')} outside; AHADIC {SHB('Sherpa AHADIC', 'inb')}, {SHB('Sherpa AHADIC', 'signal')}) and no prompt J/ψ; CR1 doubles the hadronisation's prompt J/ψ; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above CP5 outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets; e μ with the dilepton samples: backup"], "b s"),
             t="cms",
             notes="gen_variants.py on the l + jets samples (hadw/out_alt, cluster 897658, all jobs in): MC truth prompt J/psi (no b-hadron ancestor) per MC truth "
                   "b-decay J/psi in the selection of the fit, weighted; no prompt J/psi in a sample: 90% CL upper limit 2.3 / (raw b-decay count). Data: prompt / b-decay sWeights, l + jets. "
@@ -745,6 +745,36 @@ content("bk-sim", "Backup · CMS simulation", f"The vetoed category against the 
               f"the simulated b decays have no prompt-like part, the unbinned fit gives the b decays the {100 * FPI_D:.1f}% prompt-like share of the data b jets (≈ {FPI_D * SPF['N'][1]:.0f} J/ψ); "
               f"closure of the binned fit on the simulation: {MTF['closure']['signal_all']['N_p']:.0f} ± {MTF['closure']['signal_all']['N_p_err']:.0f} for {MTF['closure']['signal_all']['truth_prompt']:.0f} true"], "b s"),
         alt=True, t="cms")
+
+# --- backup: the generators in e mu with their dilepton samples (both lepton charges: no x 2 for Sherpa)
+if "emu" in GV and GV["emu"]["gen"].get("Pythia 8 CP5") and "data|signal|emu" in GV["ratio"]:
+    GE, GN0 = GV["emu"]["gen"], GV["emu"]["gen"]["Pythia 8 CP5"]
+
+    def efmt(k):
+        r = GV["ratio"].get(k)
+        if not r:
+            return "–"
+        if r.get("upper") is not None:
+            return f"&lt; {r['upper']:.2g} ({r['n_p']} / {r['n_b']})"
+        return f"{r['r']:.2g} ± {r['err']:.1g} <span style=\"color:#6B7482\">({r['n_p']}/{r['n_b']})</span>"
+
+    def erel(g, cat):
+        return f"{GE[g][f'{cat}_bdecay'][0] / GN0[f'{cat}_bdecay'][0]:.2f}"
+
+    ESH = {"Pythia 8 CP5": "POWHEG CP5", "CP5 ERD on": "CP5 ERD", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MG5 MLM", "aMC@NLO FxFx": "FxFx"}
+    erow = [[ESH.get(g, g), efmt(f"{g}|signal|emu"), erel(g, "inb"), erel(g, "signal")] for g in GE]
+    ED = GV["emu"]["data"]
+    erow.append(["<b>Data (sPlot)</b>", f"<b>{GV['ratio']['data|signal|emu']['r']:.2f} ± {GV['ratio']['data|signal|emu']['err']:.2f}</b>",
+                 f"<b>{ED['inb']['nonprompt'][0] / GN0['inb_bdecay'][0]:.2f}</b>", f"<b>{ED['signal']['nonprompt'][0] / GN0['signal_bdecay'][0]:.2f}</b>"])
+    content("bk-gen-emu", "Backup · CMS simulation", f"e μ, dilepton samples: prompt / b-decay J/ψ outside the {TB} jets data {GV['ratio']['data|signal|emu']['r']:.2f} ± {GV['ratio']['data|signal|emu']['err']:.2f}, "
+            f"CP5 {GV['ratio']['Pythia 8 CP5|signal|emu']['r']:.3f}; Sherpa {100 * (1 - float(erel('Sherpa', 'inb'))):.0f}% fewer b decays in b jets (both charges)",
+            f'<div class="row" style="gap:36px"><div class="fig">{F("mcvar_ratio_emu", "within each sample: normalisation-free", 0.66)}</div><div class="col">'
+            + table(["e μ sample", "prompt / b decay, outside", "b decays / CP5: b jets", "outside"], erow, widths=[22, 38, 24, 16], num=(1, 2, 3), hl=(len(erow) - 1,))
+            + ul([f"<b>Both lepton charges:</b> the Sherpa deficit is not the × 2 of the ℓ + jets samples; data: {ED['signal']['prompt'][0]:.0f} ± {ED['signal']['prompt'][1]:.0f} prompt J/ψ outside the {TB} jets"], "b s")
+            + "</div></div>", alt=True, t="cms",
+            notes="gen_variants.py, emu block: the dilepton samples of each generator (TTto2L2Nu, hadw/out_alt, cluster 897660; the nominal one from hadw/out_mc5) in the e mu "
+                  "channel, the selection of the unbinned fit, MC truth; data: the e mu sWeights of the combined unbinned fit. b decays / POWHEG: weighted b-decay J/psi per "
+                  "luminosity against POWHEG + Pythia 8 CP5 (data: the sWeights, without the non-ttbar backgrounds). aMC@NLO FxFx: negative weights leave no net prompt J/psi.")
 
 if len(TOYS) == 2:
     for v, nm_ in (("", "b-jet template"), ("_btmpl", "per-category template")):

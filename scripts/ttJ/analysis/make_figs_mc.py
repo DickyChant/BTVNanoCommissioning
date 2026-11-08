@@ -23,7 +23,8 @@ with cmsdeck (the cms-plotting skill's cmsplot_plotly + the deck additions; rule
   figs/mc_btmpl_data.json            the data's prompt J/psi of each fit with the b-jet template and with the per-category template (btmpl/)
   figs/mc_toys_btmpl_*, mc_toypulls_btmpl_*  the toys with the per-category template (toy_closure_btmpl.json)
   figs/mc_toys_tmplcmp_{unbinned,fit2d}.json  fit - truth of the toys with both templates in both scenarios; data-like - as simulated
-  figs/mcvar_ratio.json              (gen_variants.json) prompt J/psi per b-decay J/psi within each sample (normalisation-free), outside the
+  figs/mcvar_ratio{,_emu}.json       (gen_variants.json) prompt J/psi per b-decay J/psi within each sample (normalisation-free; _emu: the e mu
+                                     channel with the dilepton samples), outside the
                                      ttbar jets and in b jets, against the data; data / generator
   figs/mcvar_{signal,inb}.json       (gen_variants.json) prompt and b-decay J/psi per generator / tune (MC truth, l + jets)
                                      against the data (sWeights); data / generator
@@ -542,30 +543,34 @@ if len(TCV) == 2:
 
 # ---- prompt per b-decay J/psi within each sample: does not depend on the normalisation of the sample
 if "ratio" in GV and len(GV["gen"]) > 1:
-    gens = [g for g in GV["gen"] if f"{g}|signal" in GV["ratio"]]
-    xg = np.arange(len(gens), dtype=float)
-    f, ax, axr = ratio_canvas()
-    for cat, col, sym, dx, nm in (("signal", SERIES["s2"], "circle", -0.12, f"outside the {TT} jets"), ("inb", SERIES["s1"], "square", 0.12, "in b jets")):
-        D_ = GV["ratio"][f"data|{cat}"]
-        f.add_shape(type="rect", xref="x domain", yref="y", x0=0, x1=1, y0=max(D_["r"] - D_["err"], 1e-5), y1=D_["r"] + D_["err"],
-                    fillcolor="rgba(27,175,122,0.15)" if cat == "signal" else "rgba(235,104,52,0.15)", line_width=0, layer="below")
-        f.add_shape(type="line", xref="x domain", yref="y", x0=0, x1=1, y0=D_["r"], y1=D_["r"], line=dict(color=col, width=pt2px(1.2), dash="dash"))
-        f.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=f"Data (sPlot), {nm}", line=dict(color=col, width=pt2px(1.2), dash="dash")))
-        rr = [GV["ratio"][f"{g}|{cat}"] for g in gens]
-        meas = [i for i, r in enumerate(rr) if r["upper"] is None]
-        lim = [i for i, r in enumerate(rr) if r["upper"] is not None]
-        data_points(f, xg[meas] + dx, [rr[i]["r"] for i in meas], [rr[i]["err"] for i in meas], label=f"CMS sim., MC truth, {nm}", color=col, symbol=sym)
-        if lim:
-            f.add_trace(go.Scatter(x=xg[lim] + dx, y=[rr[i]["upper"] for i in lim], mode="markers", name=f"90% CL upper limit, {nm}", showlegend=False,
-                                   marker=dict(symbol="triangle-down-open", size=pt2px(5), color=col)))
-        draw_ratio(f, axr, xg[meas] + dx, np.full(len(meas), D_["r"]), np.full(len(meas), D_["err"]), [rr[i]["r"] for i in meas], [rr[i]["err"] for i in meas],
-                   xlab="", ylab="data / sim.", color=col, symbol=sym, band=(cat == "signal"))
-    f.update_layout(yaxis=dict(type="log", range=[-4.3, 3.0], tickvals=[1e-4, 1e-3, 1e-2, 0.1, 1], ticktext=["10<sup>−4</sup>", "0.001", "0.01", "0.1", "1"], minor=dict(ticks="", showgrid=False)),
-                    yaxis2=dict(type="log", range=[0, 2.0], tickvals=[1, 3, 10, 30, 100], ticktext=["1", "3", "10", "30", "100"], minor=dict(ticks="", showgrid=False)))
-    SHORT = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
-    f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=[SHORT.get(g, g) for g in gens], tickangle=0)
-    label(f)
-    ylabel(f, "prompt J/ψ per b-decay J/ψ", chars=5)
-    legend(f, f"{LJ_SEL}; CMS {TT} samples, ℓ + jets<br>within each sample: no normalisation; open triangles: 90% CL upper limits", x=0.03, xanchor="left")
-    save(f, "mcvar_ratio")
+    # l + jets with the l + jets samples; e mu with the dilepton samples of the same generators
+    for sfx, chn, rr2 in (("", "ℓ + jets", ([0, 2.0], [1, 3, 10, 30, 100])), ("|emu", "dilepton", ([-0.7, 2.7], [1, 10, 100]))):
+        gens = [g for g in GV["gen"] if f"{g}|signal{sfx}" in GV["ratio"]]
+        if not gens or f"data|signal{sfx}" not in GV["ratio"]:
+            continue
+        xg = np.arange(len(gens), dtype=float)
+        f, ax, axr = ratio_canvas()
+        for cat, col, sym, dx, nm in (("signal", SERIES["s2"], "circle", -0.12, f"outside the {TT} jets"), ("inb", SERIES["s1"], "square", 0.12, "in b jets")):
+            D_ = GV["ratio"][f"data|{cat}{sfx}"]
+            f.add_shape(type="rect", xref="x domain", yref="y", x0=0, x1=1, y0=max(D_["r"] - D_["err"], 1e-5), y1=D_["r"] + D_["err"],
+                        fillcolor="rgba(27,175,122,0.15)" if cat == "signal" else "rgba(235,104,52,0.15)", line_width=0, layer="below")
+            f.add_shape(type="line", xref="x domain", yref="y", x0=0, x1=1, y0=D_["r"], y1=D_["r"], line=dict(color=col, width=pt2px(1.2), dash="dash"))
+            f.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=f"Data (sPlot), {nm}", line=dict(color=col, width=pt2px(1.2), dash="dash")))
+            rr = [GV["ratio"][f"{g}|{cat}{sfx}"] for g in gens]
+            meas = [i for i, r in enumerate(rr) if r["upper"] is None]
+            lim = [i for i, r in enumerate(rr) if r["upper"] is not None]
+            data_points(f, xg[meas] + dx, [rr[i]["r"] for i in meas], [rr[i]["err"] for i in meas], label=f"CMS sim., MC truth, {nm}", color=col, symbol=sym)
+            if lim:
+                f.add_trace(go.Scatter(x=xg[lim] + dx, y=[rr[i]["upper"] for i in lim], mode="markers", name=f"90% CL upper limit, {nm}", showlegend=False,
+                                       marker=dict(symbol="triangle-down-open", size=pt2px(5), color=col)))
+            draw_ratio(f, axr, xg[meas] + dx, np.full(len(meas), D_["r"]), np.full(len(meas), D_["err"]), [rr[i]["r"] for i in meas], [rr[i]["err"] for i in meas],
+                       xlab="", ylab="data / sim.", color=col, symbol=sym, band=(cat == "signal"))
+        f.update_layout(yaxis=dict(type="log", range=[-4.3, 3.0], tickvals=[1e-4, 1e-3, 1e-2, 0.1, 1], ticktext=["10<sup>−4</sup>", "0.001", "0.01", "0.1", "1"], minor=dict(ticks="", showgrid=False)),
+                        yaxis2=dict(type="log", range=rr2[0], tickvals=rr2[1], ticktext=[f"{t:g}" for t in rr2[1]], minor=dict(ticks="", showgrid=False)))
+        SHORT = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
+        f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=[SHORT.get(g, g) for g in gens], tickangle=0)
+        label(f)
+        ylabel(f, "prompt J/ψ per b-decay J/ψ", chars=5)
+        legend(f, f"{LJ_SEL if not sfx else f'e μ; {NB1}; {Z0}'}; CMS {TT} samples, {chn}<br>within each sample: no normalisation; open triangles: 90% CL upper limits", x=0.03, xanchor="left")
+        save(f, "mcvar_ratio" + sfx.replace("|", "_"))
 print("figures written to", os.path.join(HERE, "figs"))

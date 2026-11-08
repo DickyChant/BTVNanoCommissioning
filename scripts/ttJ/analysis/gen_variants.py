@@ -9,8 +9,9 @@ normalised to the sigma(ttbar) x BR of the POWHEG sample x 310 fb^-1, one-charge
 Per category (b jet: cat 0; other ttbar jet: jcat 1; outside the ttbar jets: jcat >= 2), the selection of the unbinned fit
 (opposite sign, N_b >= 1, |z0| < 0.1 cm, 2.6 < m < 3.6 GeV, -0.5 < l_xy < 1.5 mm): MC truth prompt and b-decay J/psi
 against the data sWeights (l + jets). The data prompt yield in the other ttbar jets is biased by short b decays (closure).
-Only the l + jets samples are compared (Sherpa and MadGraph were processed in l + jets only); "full" scales each to the
-whole ttbar prediction of the l + jets channels with the nominal ratio (l + jets + dilepton samples) / (l + jets sample).
+The l + jets channels with the l + jets samples; "full" scales each to the whole ttbar prediction of the l + jets channels with
+the nominal ratio (l + jets + dilepton samples) / (l + jets sample). The e mu channel separately ("emu" block, ratio keys
+"<gen>|<cat>|emu") with the dilepton samples of the same generators (cluster 897660) against the e mu sWeights.
 -> gen_variants.json   usage: python3 gen_variants.py <nominal cands_assoc> <nominal sumw.json> <variants cands_assoc>
                               <variants sumw.json> <xsec_map.json> <data sweights.parquet> <out.json>"""
 import json
@@ -35,15 +36,25 @@ GEN = {  # name: data-set name prefixes (l + jets)
     "MG5 MLM": ("TTtoLplusNu2Q-3Jets_TuneCP5", "TTtoLminusNu2Q-3Jets_TuneCP5"),
     "aMC@NLO FxFx": ("TTtoLplusNu2Q-2Jets_TuneCP5", "TTtoLminusNu2Q-2Jets_TuneCP5"),
 }
+GEN_DL = {  # the dilepton samples of the same generators (e mu)
+    "Pythia 8 CP5": ("TTto2L2Nu_TuneCP5_13p6TeV",),
+    "CP5 CR1": ("TTto2L2Nu_TuneCP5CR1_",),
+    "CP5 CR2": ("TTto2L2Nu_TuneCP5CR2_",),
+    "CP5 ERD on": ("TTto2L2Nu_Par-ERD-On_",),
+    "Sherpa": ("TTto2L2Nu-4Jets-1NLO3LO_TuneSherpaDef",),
+    "Sherpa AHADIC": ("TTto2L2Nu-4Jets-1NLO3LO_TuneAHADIC",),
+    "MG5 MLM": ("TTto2L2Nu-3Jets_TuneCP5",),
+    "aMC@NLO FxFx": ("TTto2L2Nu-2Jets_TuneCP5",),
+}
 CATS = ("inb", "ttj", "signal")
 
 
-def load(d_, swj):
+def load(d_, swj, chans=LJ):
     if not os.path.exists(swj):
         return pd.DataFrame()
     SW = json.load(open(swj))
     out = []
-    for ch in LJ:
+    for ch in chans:
         p = os.path.join(d_, f"cands_{ch}.parquet")
         if not os.path.exists(p):
             continue
@@ -61,39 +72,63 @@ S = pd.read_parquet(SWQ)
 S = S[S.ch.isin(LJ)]
 SMP = {"inb": "inb", "ttj": "ttj", "signal": "notb"}
 OUT = {"lumi_pb": LUMI_PB, "data": {}, "gen": {}, "datasets": {}, "full_over_lj": {}}
-for cat in CATS:
-    ds = S[S["sample"] == SMP[cat]]
-    OUT["data"][cat] = {sp: [float(ds[f"w_{sp}"].sum()), float(np.sqrt((ds[f"w_{sp}"] ** 2).sum()))] for sp in ("prompt", "nonprompt")}
-for g, pre in GEN.items():
-    q = A[A.dataset.str.startswith(pre)] if len(A) else A
-    if not len(q):
-        continue
-    OUT["datasets"][g] = sorted(q.dataset.unique().tolist())
-    cm = {"inb": (q.cat == 0).to_numpy(), "ttj": (q.jcat == 1).to_numpy(), "signal": (q.jcat >= 2).to_numpy()}
-    r = {}
+
+
+def data_yields(S_):
+    """prompt and b-decay sWeights per category"""
+    out = {}
     for cat in CATS:
-        for t, tn in ((0, "prompt"), (1, "bdecay")):
-            k = cm[cat] & (q.truth == t).to_numpy()
-            w = q.w.to_numpy(float)[k]
-            r[f"{cat}_{tn}"] = [float(w.sum()), float(np.sqrt((w ** 2).sum())), int(k.sum())]
-    OUT["gen"][g] = r
-# prompt J/psi per b-decay J/psi within each sample: independent of the normalisation (cross section, sum of weights, event weights);
-# no prompt J/psi in the sample: 90% CL upper limit 2.3 / (raw b-decay count) x (weighted / raw b decays)
-OUT["ratio"] = {}
-for g, r in OUT["gen"].items():
-    for cat in CATS:
-        p_, b_ = r[f"{cat}_prompt"], r[f"{cat}_bdecay"]
-        if b_[0] <= 0 or b_[2] == 0:
+        ds = S_[S_["sample"] == SMP[cat]]
+        out[cat] = {sp: [float(ds[f"w_{sp}"].sum()), float(np.sqrt((ds[f"w_{sp}"] ** 2).sum()))] for sp in ("prompt", "nonprompt")}
+    return out
+
+
+def by_truth(A_, gens, out):
+    """weighted MC truth prompt and b-decay J/psi per category of each generator: [sum, error, raw count]"""
+    for g, pre in gens.items():
+        q = A_[A_.dataset.str.startswith(pre)] if len(A_) else A_
+        if not len(q):
             continue
-        if p_[2] > 0 and p_[0] > 0:
-            v = p_[0] / b_[0]
-            OUT["ratio"][f"{g}|{cat}"] = {"r": v, "err": v * ((p_[1] / p_[0]) ** 2 + (b_[1] / b_[0]) ** 2) ** 0.5, "n_p": p_[2], "n_b": b_[2], "upper": None}
-        else:
-            OUT["ratio"][f"{g}|{cat}"] = {"r": 0.0, "err": 0.0, "n_p": p_[2], "n_b": b_[2], "upper": 2.3 / b_[2]}
-for cat in CATS:
-    dp, db = OUT["data"][cat]["prompt"], OUT["data"][cat]["nonprompt"]
-    v = dp[0] / db[0]
-    OUT["ratio"][f"data|{cat}"] = {"r": v, "err": v * ((dp[1] / dp[0]) ** 2 + (db[1] / db[0]) ** 2) ** 0.5}
+        out["datasets"][g] = sorted(q.dataset.unique().tolist())
+        cm = {"inb": (q.cat == 0).to_numpy(), "ttj": (q.jcat == 1).to_numpy(), "signal": (q.jcat >= 2).to_numpy()}
+        r = {}
+        for cat in CATS:
+            for t, tn in ((0, "prompt"), (1, "bdecay")):
+                k = cm[cat] & (q.truth == t).to_numpy()
+                w = q.w.to_numpy(float)[k]
+                r[f"{cat}_{tn}"] = [float(w.sum()), float(np.sqrt((w ** 2).sum())), int(k.sum())]
+        out["gen"][g] = r
+
+
+def add_ratios(blk, sfx=""):
+    """prompt J/psi per b-decay J/psi within each sample: independent of the normalisation (cross section, sum of weights, event
+    weights); no prompt J/psi in the sample: 90% CL upper limit 2.3 / (raw b-decay count) x (weighted / raw b decays)"""
+    for g, r in blk["gen"].items():
+        for cat in CATS:
+            p_, b_ = r[f"{cat}_prompt"], r[f"{cat}_bdecay"]
+            if b_[0] <= 0 or b_[2] == 0:
+                continue
+            if p_[2] > 0 and p_[0] > 0:
+                v = p_[0] / b_[0]
+                OUT["ratio"][f"{g}|{cat}{sfx}"] = {"r": v, "err": v * ((p_[1] / p_[0]) ** 2 + (b_[1] / b_[0]) ** 2) ** 0.5, "n_p": p_[2], "n_b": b_[2], "upper": None}
+            else:
+                OUT["ratio"][f"{g}|{cat}{sfx}"] = {"r": 0.0, "err": 0.0, "n_p": p_[2], "n_b": b_[2], "upper": 2.3 / b_[2]}
+    for cat in CATS:
+        dp, db = blk["data"][cat]["prompt"], blk["data"][cat]["nonprompt"]
+        if db[0] > 0 and dp[0] > 0:
+            v = dp[0] / db[0]
+            OUT["ratio"][f"data|{cat}{sfx}"] = {"r": v, "err": v * ((dp[1] / dp[0]) ** 2 + (db[1] / db[0]) ** 2) ** 0.5}
+
+
+OUT["data"] = data_yields(S)
+by_truth(A, GEN, OUT)
+OUT["ratio"] = {}
+add_ratios(OUT)
+# the e mu channel: the dilepton samples of the same generators against the e mu sWeights
+SE = pd.read_parquet(SWQ)
+OUT["emu"] = {"data": data_yields(SE[SE.ch == "emu"]), "gen": {}, "datasets": {}}
+by_truth(pd.concat([load(NOMD, NOMSW, ("emu",)), load(ALTD, ALTSW, ("emu",))], ignore_index=True), GEN_DL, OUT["emu"])
+add_ratios(OUT["emu"], "|emu")
 print("prompt / b decay:", {k: (round(v["r"], 4), round(v["err"], 4), v.get("upper") and round(v["upper"], 4)) for k, v in OUT["ratio"].items() if not k.endswith("|ttj")})
 nom = OUT["gen"].get("Pythia 8 CP5")
 if nom:  # the dilepton events in the l + jets channels: nominal (all samples) / (l + jets sample), per category and species
@@ -120,5 +155,10 @@ for g, r in OUT["gen"].items():
     print(line)
     if nom and g != "Pythia 8 CP5":
         print(f"{'  / nominal':16s}" + "".join(f"{r[f'{c}_{tn}'][0] / nom[f'{c}_{tn}'][0]:20.2f}  " if nom[f"{c}_{tn}"][0] else f"{'-':>22s}" for c in CATS for tn in ("prompt", "bdecay")))
+print("e mu, dilepton samples (prompt / b decay outside the ttbar jets; in b jets):")
+for g in ["data"] + list(OUT["emu"]["gen"]):
+    a, b = OUT["ratio"].get(f"{g}|signal|emu"), OUT["ratio"].get(f"{g}|inb|emu")
+    fm = lambda x: "-" if not x else (f"< {x['upper']:.3f}" if x.get("upper") else f"{x['r']:.4f} +- {x['err']:.4f}")  # noqa: E731
+    print(f"  {g:16s} {fm(a):>20s} {fm(b):>20s}")
 json.dump(OUT, open(OUTJ, "w"), indent=1)
 print("wrote", OUTJ)
