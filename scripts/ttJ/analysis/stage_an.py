@@ -1,5 +1,5 @@
-"""Stage the figures of the signal with the ttbar-jet veto (assoc_), the simulation (mc_) and the generator comparison (gen_) for the
-analysis note: figs/<deck name>.json -> <an dir>/<prefix>_<name>.pdf (vector, kaleido), and their lines "<file> | <caption>" in
+"""Stage the figures of the signal with the ttbar-jet veto (assoc_), the CMS simulation (mc_) and the generator-level study (gen_: our
+private Pythia 8 + LETO sample, not a CMS sample; every caption says so) for the analysis note: figs/<deck name>.json -> <an dir>/<prefix>_<name>.pdf (vector, kaleido), and their lines "<file> | <caption>" in
 <an dir>/MANIFEST.txt (the lines with these prefixes are replaced; the others kept), the numbers read from the fit outputs. Also
 <an dir>/MC_SAMPLES.txt: the simulated samples (DAS names, cross sections, pass).
 usage: python3 stage_an.py <an dir>"""
@@ -32,8 +32,9 @@ SN, SZ, SNC, SZC = (GX["scaled"][k] for k in ("nominal", "z", "nominal_bcorr", "
 BP = {s_: BAL["profile"][f"{s_}_excl_all"]["ppar_all_pt"] for s_ in ("prompt", "pileup", "sps", "dps")}
 BF = BAL["fit"]
 HAS_BKG = bool(EV["mujets"].get("bkg"))
+GENA = "our private generator-level Pythia 8.317 + LETO sample (not a CMS sample, no detector simulation)"
 MCN = ("the CMS simulation at sigma x 310 fb-1: ttbar (Summer24 POWHEG + Pythia 8 CP5, full simulation) and the non-ttbar backgrounds (single top, W+jets, "
-       "ttW, ttZ, WW/WZ/ZZ, QCD mu-enriched; no Drell-Yan, no QCD EM-enriched)" if HAS_BKG else
+       "ttW, ttZ, WW/WZ/ZZ; QCD mu-enriched in the event counts only, too few simulated J/psi to stack; no Drell-Yan, no QCD EM-enriched)" if HAS_BKG else
        "the CMS ttbar simulation (Summer24 POWHEG + Pythia 8 CP5, full simulation) at sigma(ttbar) x 310 fb-1, no non-ttbar backgrounds")
 
 
@@ -89,15 +90,15 @@ STAGE = [
      + (f"; data / (ttbar + backgrounds) {EV['mujets']['ratio_all']:.2f}, {EV['ejets']['ratio_all']:.2f}, {EV['emu']['ratio_all']:.2f}." if HAS_BKG else ".")),
     ("chan_rates", "mc_rates_per_channel", f"Prompt and b-decay J/psi outside the ttbar jets per channel, data (sPlot) against {MCN}; lower panel: data / simulation."),
     ("chan_mt", "assoc_mt_per_channel", "m_T(l, pT^miss) of the events with a prompt J/psi outside the ttbar jets (sWeights), mu+jets and e+jets, against the b-decay ones (both channels), unit area; lower panel: prompt / b decay. The e+jets prompt-J/psi events are not at the low m_T of QCD with a fake electron."),
-    # ---- the generator comparison (Pythia 8 + LETO, gen level)
-    ("assoc_gen", "gen_leak_origin", f"Pythia 8.317 + LETO (J/psi in the parton shower) ttbar l+jets, gen level, the selection and veto of the data: where the prompt J/psi of each origin (top decay, ISR) end up; {100 * GEN['leak']['eff']:.0f}% of the top-decay J/psi pass the veto, {100 * GEN['leak']['signal_top_decay_share']:.0f}% of the signal is top decay. Lower panel: top decay / ISR."),
-    ("an_leak_z", "gen_leak_z", f"z = pT(J/psi) / pT(jet) of the vetoed prompt J/psi, data (sWeights; mean {GZ['mean_z_data']:.2f}) against Pythia 8 + LETO (mean {GZ['mean_z_pythia']:.2f}), unit area; lower panel: data / Pythia = the z weights applied to every Pythia J/psi inside a jet."),
-    ("gencmp_yields", "gen_yields", f"Prompt J/psi in the other ttbar jets (vetoed) and outside the ttbar jets, l+jets: data (sPlot) against Pythia 8 + LETO with its default LDMEs (normalised with the b-decay J/psi per pT bin, data / Pythia {GX['norm']['k_all']:.2f}) by origin, and a 2nd scattering at sigma_eff = 15 mb ({GX['dps']['n_lj']['15']:.0f}); diamonds: Pythia with the data z. Lower panel: data / prediction."),
-    ("gencmp_pt_ttj", "gen_pt_vetoed", f"pT of the vetoed prompt J/psi, data against Pythia scaled to them (x {SN['scale']:.2f}); dashed: with the data z (x {SZ['scale']:.2f}). Lower panel: data / Pythia."),
-    ("gencmp_pt", "gen_pt_signal", f"pT of the prompt J/psi outside the ttbar jets, data against Pythia scaled to the vetoed J/psi ({SN['sps_signal']:.0f} +- {SN['sps_signal_err']:.0f}; {SZ['sps_signal']:.0f} with the data z) plus a 2nd scattering at 15 mb; with the vetoed yield corrected for short b decays (x {SNC['scale']:.2f}): {SNC['sps_signal']:.0f} +- {SNC['sps_signal_err']:.0f} ({SZC['sps_signal']:.0f}), leaving {SNC['dps_left']:.0f} +- {SNC['dps_left_err']:.0f} ({SZC['dps_left']:.0f} +- {SZC['dps_left_err']:.0f}) for a 2nd scattering (uncorrected {SN['dps_left']:.0f} +- {SN['dps_left_err']:.0f} / {SZ['dps_left']:.0f} +- {SZ['dps_left_err']:.0f}): sigma_eff ~ {SNC['sigma_eff_mb']:.0f} / {SZC['sigma_eff_mb']:.0f} mb, > {SNC['sigma_eff_mb_95_lower']:.1f} / {SZC['sigma_eff_mb_95_lower']:.1f} mb at 95% CL (uncorrected > {SN['sigma_eff_mb_95_lower']:.1f} / {SZ['sigma_eff_mb_95_lower']:.1f}). Lower panel: data / prediction."),
-    ("gencmp_drtt", "gen_drtt_signal", "Delta R(J/psi, nearest ttbar jet) of the prompt signal J/psi against Pythia (scaled to the vetoed J/psi) plus the 2nd scattering; lower panel: data / prediction."),
-    ("gencmp_dy", "gen_dy_signal", "|Delta y(J/psi, ttbar)| of the prompt signal J/psi against Pythia plus the 2nd scattering; lower panel: data / prediction."),
-    ("gencmp_dphi", "gen_dphi_signal", "|Delta phi(J/psi, ttbar without the J/psi jet)| of the prompt signal J/psi against Pythia plus the 2nd scattering; lower panel: data / prediction."),
+    # ---- the generator-level study (our private Pythia 8 + LETO sample, not a CMS sample): GENA on first mention in every caption
+    ("assoc_gen", "gen_leak_origin", f"{GENA[0].upper() + GENA[1:]}: ttbar l+jets, J/psi in the parton shower, gen jets with the selection and veto of the data: where the prompt J/psi of each origin (top decay, ISR) end up; {100 * GEN['leak']['eff']:.0f}% of the top-decay J/psi pass the veto, {100 * GEN['leak']['signal_top_decay_share']:.0f}% of the signal is top decay. Lower panel: top decay / ISR."),
+    ("an_leak_z", "gen_leak_z", f"z = pT(J/psi) / pT(jet) of the vetoed prompt J/psi, data (sWeights; mean {GZ['mean_z_data']:.2f}) against {GENA} (mean {GZ['mean_z_pythia']:.2f}), unit area; lower panel: data / gen-level Pythia = the z weights applied to every gen-level Pythia J/psi inside a jet."),
+    ("gencmp_yields", "gen_yields", f"Prompt J/psi in the other ttbar jets (vetoed) and outside the ttbar jets, l+jets: data (sPlot) against {GENA} with the default LDMEs (normalised with the b-decay J/psi per pT bin, data / gen-level Pythia {GX['norm']['k_all']:.2f}) by origin, and a 2nd scattering at sigma_eff = 15 mb ({GX['dps']['n_lj']['15']:.0f}); diamonds: Pythia with the data z. Lower panel: data / prediction."),
+    ("gencmp_pt_ttj", "gen_pt_vetoed", f"pT of the vetoed prompt J/psi, data against {GENA}, scaled to them (x {SN['scale']:.2f}); dashed: with the data z (x {SZ['scale']:.2f}). Lower panel: data / Pythia."),
+    ("gencmp_pt", "gen_pt_signal", f"pT of the prompt J/psi outside the ttbar jets, data against {GENA}, scaled to the vetoed J/psi ({SN['sps_signal']:.0f} +- {SN['sps_signal_err']:.0f}; {SZ['sps_signal']:.0f} with the data z) plus a 2nd scattering at 15 mb; with the vetoed yield corrected for short b decays (x {SNC['scale']:.2f}): {SNC['sps_signal']:.0f} +- {SNC['sps_signal_err']:.0f} ({SZC['sps_signal']:.0f}), leaving {SNC['dps_left']:.0f} +- {SNC['dps_left_err']:.0f} ({SZC['dps_left']:.0f} +- {SZC['dps_left_err']:.0f}) for a 2nd scattering (uncorrected {SN['dps_left']:.0f} +- {SN['dps_left_err']:.0f} / {SZ['dps_left']:.0f} +- {SZ['dps_left_err']:.0f}): sigma_eff ~ {SNC['sigma_eff_mb']:.0f} / {SZC['sigma_eff_mb']:.0f} mb, > {SNC['sigma_eff_mb_95_lower']:.1f} / {SZC['sigma_eff_mb_95_lower']:.1f} mb at 95% CL (uncorrected > {SN['sigma_eff_mb_95_lower']:.1f} / {SZ['sigma_eff_mb_95_lower']:.1f}). Lower panel: data / prediction."),
+    ("gencmp_drtt", "gen_drtt_signal", f"Delta R(J/psi, nearest ttbar jet) of the prompt signal J/psi against {GENA} (scaled to the vetoed J/psi) plus the 2nd scattering; lower panel: data / prediction."),
+    ("gencmp_dy", "gen_dy_signal", f"|Delta y(J/psi, ttbar)| of the prompt signal J/psi against {GENA} plus the 2nd scattering; lower panel: data / prediction."),
+    ("gencmp_dphi", "gen_dphi_signal", f"|Delta phi(J/psi, ttbar without the J/psi jet)| of the prompt signal J/psi against {GENA} plus the 2nd scattering; lower panel: data / prediction."),
 ]
 # same sign, the pileup |z0| fit, per year, jet multiplicity and the ttbar role of the J/psi jet
 SSY = [(sum(R["channels"][c]["yields"][f"data_{k}_notb_ge1b"]["n"] for c in R["channels"]),
@@ -167,7 +168,7 @@ for src, dst, cap in STAGE:
 man = os.path.join(AN, "MANIFEST.txt")
 old = open(man).read().splitlines() if os.path.exists(man) else []
 keep = [l for l in old if not l.startswith(("assoc_", "mc_", "gen_"))]
-hdr = ["# --- 2026-11-07: the signal with the ttbar-jet veto (assoc_), the CMS ttbar simulation (mc_), Pythia 8 + LETO (gen_); pass run5m "
+hdr = ["# --- 2026-11-07: the signal with the ttbar-jet veto (assoc_), the CMS ttbar simulation (mc_), our private generator-level Pythia 8 + LETO study, not a CMS sample (gen_); pass run5m "
        "(79eecfe, 22 of 58723 files missing), 310 fb-1; figures from the 7 Nov deck (cms-plotting, plotlyhep); statistical uncertainties only"]
 keep = [l for l in keep if not l.startswith("# --- 2026-11-07")]
 open(man, "w").write("\n".join(keep + hdr + lines) + "\n")

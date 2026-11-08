@@ -2,8 +2,20 @@
 
 The steps after the ttJ batch pass (`scripts/ttJ/run_job.sh`): candidate tables, the veto of the ttbar decay jets, the
 lifetime fits, the unbinned m x l_xy fit (sPlot), the CMS ttbar simulation (closure, data / simulation), the generator /
-tune variants and the non-ttbar backgrounds, Pythia 8 + LETO at gen level, the figures (cms-plotting rules, plotlyhep),
-the HTML deck and the figures of the analysis note.
+tune variants and the non-ttbar backgrounds, our private generator-level Pythia 8 + LETO study, the figures (cms-plotting
+rules, plotlyhep), the HTML deck and the figures of the analysis note.
+
+## Two kinds of simulation
+
+Kept apart in every figure, slide, caption and the animation:
+
+| | CMS simulation | private gen-level study (`genstudy/`) |
+|---|---|---|
+| what | official CMS samples (NanoAOD) through the ttJ workflow of the data pass | our own Pythia 8.317 sample, generated for this study: not a CMS sample |
+| J/psi | b-hadron decays, prompt J/psi from hadronisation only (no onia in the shower) | LETO: onia in the parton shower (`CharmoniumShower:all`), LDMEs scaled up and divided out |
+| detector | full simulation and reconstruction | none: gen jets, b tag by efficiency, smeared MET |
+| figures | CMS label ('CMS Simulation' alone; 'CMS' with data), legends 'CMS ttbar sim.' | label 'Pythia 8 + LETO, private, gen level' (`cmsdeck.label(gen=True)`), never a CMS label alone; legends 'gen. Pythia + LETO' |
+| deck | tag CMS SIMULATION · FULL DETECTOR, kicker 'CMS simulation · ...' | tag PRIVATE GEN LEVEL · PYTHIA 8 + LETO, kicker 'Gen study · ...' |
 
 ## Environment
 
@@ -19,8 +31,8 @@ pixi run -e analysis --manifest-path <checkout>/pixi.toml python <script> ...
 
 kaleido (PNG / PDF export) uses a Chrome found on the machine; where there is none:
 `pixi run -e analysis python -c "import kaleido; kaleido.get_chrome_sync()"`.
-Other environments: `anim` (Manim, `anim/ttjpsi.py`); the gen-level Pythia 8.317 + LETO sample (`genstudy/`) uses the
-LCG_110 view (its Pythia python bindings).
+Other environments: `anim` (Manim, `anim/ttjpsi.py`); the private gen-level Pythia 8.317 + LETO sample (`genstudy/`) uses
+the LCG_110 view (its Pythia python bindings).
 
 ## Configuration
 
@@ -62,7 +74,7 @@ pixi run -e analysis --manifest-path $TTJ_REPO/pixi.toml python stage_an.py <an_
 | l_xy fit, mass and m x l_xy fits | `fit_lxy.py`, `fit_jpsi.py` | `fit_lxy.json`, `fit_jpsi.json` |
 | unbinned m x l_xy fit, sWeights, DPS rate | `splot_prompt.py` (`SIGNAL=assoc`) | `splot.json`, `sweights_assoc.parquet` |
 | pT balance, W-pair check | `ttbar_balance.py`, `wpair_check.py` | `ttbar_balance.json`, `wpair_check.json` |
-| Pythia 8 + LETO (gen level) | `genstudy/gen_ttjpsi.py` (batch: `genstudy/run_ttjpsi.sh`), `gen_assoc.py`, `gen_leak_z.py`, `gen_cutscan.py`, `gen_compare.py` | `gen_*.json` |
+| private gen-level Pythia 8 + LETO (not a CMS sample) | `genstudy/gen_ttjpsi.py` (batch: `genstudy/run_ttjpsi.sh`), `gen_assoc.py`, `gen_leak_z.py`, `gen_cutscan.py`, `gen_compare.py` | `gen_*.json` |
 | data / ttbar simulation, closure, backgrounds | `mc_compare.py` (`TTJ_BKG`), `mc_template_fit.py` | `mc_compare.json`, `mc_template.json` |
 | generators and tunes | `gen_variants.py` | `gen_variants.json` |
 | b-decay l_xy shape per category (MC truth), the fits with it (`TTJ_BTEMPLATE=btemplate.json`) | `btemplate_mc.py` | `btemplate.json`, `btmpl/` |

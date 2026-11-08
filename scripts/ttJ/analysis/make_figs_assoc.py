@@ -5,7 +5,8 @@ hadW_ntrack_ttbar/.claude/cms-plotting):
                          lower panel: prompt J/psi / extra jet
   figs/assoc_drtt.json   Delta R(J/psi, nearest ttbar jet): prompt J/psi outside the ttbar jets against prompt pileup J/psi;
                          lower panel: signal / pileup
-  figs/assoc_gen.json    Pythia8 ttbar with J/psi from the parton shower (gen_assoc.json): where the J/psi of each origin ends
+  figs/assoc_gen.json    our private generator-level Pythia 8 + LETO ttbar sample (genstudy/, not a CMS sample, no detector), J/psi
+                         from the parton shower (gen_assoc.json): where the J/psi of each origin ends
                          up (b jet, other ttbar jet, a jet outside the ttbar, no selected jet); lower panel: top decay / ISR
 usage: python3 make_figs_assoc.py"""
 import json
@@ -114,9 +115,9 @@ for key, nm, col, sym in ORG:
     data_points(f, x0 + (k - 0.5) * 0.16, y, ye, label=f"{nm} ({nt})", color=col, symbol=sym)
     k += 1
 headroom(f, 0.8, bottom=-0.03, factor=1.0)
-label(f, "13.6 TeV", sim=True)
+label(f, None, gen=True)  # not a CMS sample: no CMS label; 13.6 TeV in the legend
 ylabel(f, "fraction of the J/ψ of each origin", chars=4)
-legend(f, f"Pythia 8 + LETO {TT}, ℓ + jets; selection and veto as in data<br>prompt J/ψ → μμ (μ p<sub>T</sub> > 3 GeV) from the shower")
+legend(f, f"not a CMS sample: no detector simulation, gen jets<br>13.6 TeV {TT} ℓ + jets, selection and veto as in data<br>prompt J/ψ → μμ (μ p<sub>T</sub> > 3 GeV) from the shower")
 (yt, yte), (yi, yie) = frac["top decay"], frac["ISR"]
 r = yt / yi
 re = r * np.hypot(yte / yt, yie / yi)  # categories have no bin edges, so no band: the point error carries both origins

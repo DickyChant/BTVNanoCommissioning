@@ -50,9 +50,9 @@ CATN = {"signal": f"J/ψ outside the {TT} jets", "ttj": f"J/ψ in the other {TT}
 SEL = f"{CH3}; {NB1}; {Z0}"
 LJ_SEL = f"μ + jets, e + jets; {NB1}; {Z0}"
 HAS_BKG = "bkg" in C["lxy"]["signal_all"]
-SIMN = (f"simulation: {TT} + backgrounds, 310 fb<sup>−1</sup>" if HAS_BKG else f"{TT} simulation only: σ<sub>{TT}</sub> × 310 fb<sup>−1</sup>")
-TRUTH = (("b decay", f"{TT} sim.: b-hadron decay", SERIES["s1"]), ("prompt", f"{TT} sim.: prompt J/ψ", SERIES["s2"]))  # stacked
-COMB = ("no J/psi", f"{TT} sim.: no common J/ψ parent", SERIES["comb"])  # what the sideband subtraction leaves: a line around 0
+SIMN = (f"CMS simulation: {TT} + backgrounds, 310 fb<sup>−1</sup>" if HAS_BKG else f"CMS {TT} simulation only: σ<sub>{TT}</sub> × 310 fb<sup>−1</sup>")
+TRUTH = (("b decay", f"CMS {TT} sim.: b-hadron decay", SERIES["s1"]), ("prompt", f"CMS {TT} sim.: prompt J/ψ", SERIES["s2"]))  # stacked
+COMB = ("no J/psi", f"CMS {TT} sim.: no common J/ψ parent", SERIES["comb"])  # what the sideband subtraction leaves: a line around 0
 XL = "ℓ<sub>xy</sub> [mm]"
 
 
@@ -71,7 +71,7 @@ def stack(fig, edges, comps, colors, labels):
         lo = hi
 
 
-BKGN, BKGC = f"non-{TT} backgrounds (sim.)", SERIES["s3"]
+BKGN, BKGC = f"non-{TT} backgrounds (CMS sim.)", SERIES["s3"]
 
 
 def with_bkg(L, comps, errs, cols, labs, scale):
@@ -116,7 +116,7 @@ for cat in ("signal", "ttj", "inb"):
 cats = ("inb", "ttj", "signal")
 R = [C["rates"][f"{k}_all"] for k in cats]
 f, ax, axr = ratio_canvas()
-for key, dx, col, nm in (("mc_b decay", -0.21, SERIES["s1"], f"{TT} sim.: b-hadron decay"), ("mc_prompt", 0.21, SERIES["s2"], f"{TT} sim.: prompt J/ψ")):
+for key, dx, col, nm in (("mc_b decay", -0.21, SERIES["s1"], f"CMS {TT} sim.: b-hadron decay"), ("mc_prompt", 0.21, SERIES["s2"], f"CMS {TT} sim.: prompt J/ψ")):
     xs, ys = [], []
     for i, r in enumerate(R):
         xs += [i + dx - 0.17, i + dx + 0.17, None]
@@ -157,7 +157,7 @@ step(f, ET, np.asarray(T["templates"]["prompt_1"][0]) / bt, SERIES["s2"], "promp
 headroom(f, max(np.max(np.asarray(T["templates"][k][0]) / bt) for k in ("bdecay_ttj", "prompt_1")), factor=1.45)
 label(f, rlabel="13.6 TeV", sim=True)
 ylabel(f, "fraction / mm", chars=4)
-legend(f, f"{TT} simulation (POWHEG + Pythia 8), MC truth<br>{SEL}; J/ψ window")
+legend(f, f"CMS {TT} simulation (POWHEG + Pythia 8), MC truth<br>{SEL}; J/ψ window")
 save(f, "mc_bshape")
 
 
@@ -209,11 +209,11 @@ for cat, key, where in (("signal", "notb", f"J/ψ outside the {TT} jets"), ("ttj
     step(f, EP, comp["prompt"], SERIES["s2"], f"fit: prompt J/ψ, {FI['N'][0]:.0f} ± {FI['N_err'][0]:.0f}", dash="dot", width=2.0)
     step(f, EP, tot, SERIES["total"], "fit", width=2.0)
     kk = d > 0
-    data_points(f, cp_[kk], d[kk], np.sqrt(d[kk]), label="simulation as pseudo-data", ex=np.full(int(kk.sum()), bp / 2))
+    data_points(f, cp_[kk], d[kk], np.sqrt(d[kk]), label="CMS simulation as pseudo-data", ex=np.full(int(kk.sum()), bp / 2))
     f.update_layout(yaxis=dict(type="log", range=[np.log10(0.5), np.log10(600 * d.max())], minor=dict(ticks="", showgrid=False)))
     label(f, rlabel="13.6 TeV", sim=True)
     ylabel(f, f"J/ψ candidates / {bp:g} mm", chars=5)
-    legend(f, f"{TT} simulation (POWHEG + Pythia 8); {SEL}<br>{where}; 2.6 &lt; m(μμ) &lt; 3.6 GeV; unbinned fit")
+    legend(f, f"CMS {TT} simulation (POWHEG + Pythia 8); {SEL}<br>{where}; 2.6 &lt; m(μμ) &lt; 3.6 GeV; unbinned fit")
     draw_pull(f, axp, cp_, d, tot, -0.3, 1.2, XL)
     save(f, f"mc_closure_{cat}")
 
@@ -307,7 +307,7 @@ save(f, "chan_mt")
 f, ax, axr = ratio_canvas()
 RC = [C["rates"][f"signal_{ch}"] for ch, _ in CHS]
 x0 = np.arange(len(CHS), dtype=float)
-for key, dx, col, nm in (("mc_b decay", -0.21, SERIES["s1"], f"{TT} sim.: b-hadron decay"), ("mc_prompt", 0.21, SERIES["s2"], f"{TT} sim.: prompt J/ψ")):
+for key, dx, col, nm in (("mc_b decay", -0.21, SERIES["s1"], f"CMS {TT} sim.: b-hadron decay"), ("mc_prompt", 0.21, SERIES["s2"], f"CMS {TT} sim.: prompt J/ψ")):
     xs, ys = [], []
     for i, r in enumerate(RC):
         xs += [i + dx - 0.17, i + dx + 0.17, None]
@@ -339,6 +339,7 @@ if len(GV["gen"]) > 1:
     SHORTV = {"Pythia 8 CP5": "CP5", "CP5 CR1": "CR1", "CP5 CR2": "CR2", "CP5 ERD on": "ERD", "Sherpa": "Sherpa", "Sherpa AHADIC": "AHADIC", "MG5 MLM": "MLM", "aMC@NLO FxFx": "FxFx"}
     for cat, where in (("signal", f"J/ψ outside the {TT} jets"), ("inb", "J/ψ in a b jet")):
         f, ax, axr = ratio_canvas()
+        ymax = 1.0
         for sp, dsp, col, sym, dx, nm in (("bdecay", "nonprompt", SERIES["s1"], "square", -0.12, "b-hadron decay"), ("prompt", "prompt", SERIES["s2"], "circle", 0.12, "prompt J/ψ")):
             d, ed = GV["data"][cat][dsp]
             f.add_shape(type="rect", xref="x domain", yref="y", x0=0, x1=1, y0=max(d - ed, 1e-3), y1=d + ed, fillcolor="rgba(11,11,11,0.12)" if sp == "prompt" else "rgba(235,104,52,0.15)",
@@ -346,15 +347,18 @@ if len(GV["gen"]) > 1:
             f.add_shape(type="line", xref="x domain", yref="y", x0=0, x1=1, y0=d, y1=d, line=dict(color=SERIES["data"] if sp == "prompt" else col, width=pt2px(1.2), dash="dash"))
             f.add_trace(go.Scatter(x=[None], y=[None], mode="lines", name=f"Data (sPlot): {nm}", line=dict(color=SERIES["data"] if sp == "prompt" else col, width=pt2px(1.2), dash="dash")))
             v = np.array([GV["gen"][g][f"{cat}_{sp}_full"] for g in gens]) * QF[:, None]
-            data_points(f, xg + dx, v[:, 0], v[:, 1], label=f"simulation, MC truth: {nm}", color=col, symbol=sym)
+            ymax = max(ymax, d + ed, np.nanmax(v[:, 0] + v[:, 1]))
+            data_points(f, xg + dx, v[:, 0], v[:, 1], label=f"CMS sim., MC truth: {nm}", color=col, symbol=sym)
             draw_ratio(f, axr, xg + dx, np.full(len(gens), d), np.full(len(gens), ed), v[:, 0], v[:, 1], xlab="", ylab="data / sim.", color=col, symbol=sym,
                        band=(sp == "prompt"))
-        f.update_layout(yaxis=dict(type="log", range=[0, 4.6], tickvals=[1, 10, 100, 1000, 1e4], ticktext=["1", "10", "100", "1000", "10<sup>4</sup>"], minor=dict(ticks="", showgrid=False)),
+        top = max(4.6, (np.log10(ymax) + 0.15) / 0.56)  # the 7-line legend takes the top 44% of the log axis
+        tv = [10.0 ** k for k in range(int(top) + 1)]
+        f.update_layout(yaxis=dict(type="log", range=[0, top], tickvals=tv, ticktext=[f"{t:g}" if t < 1e4 else f"10<sup>{int(np.log10(t))}</sup>" for t in tv], minor=dict(ticks="", showgrid=False)),
                         yaxis2=dict(type="log", range=[-0.7, 2.0], tickvals=[0.3, 1, 3, 10, 30, 100], ticktext=["0.3", "1", "3", "10", "30", "100"], minor=dict(ticks="", showgrid=False)))
         f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=[SHORTV.get(g, g) for g in gens], tickangle=0)
         label(f)
         ylabel(f, "J/ψ", chars=5)
-        legend(f, f"{LJ_SEL}; {where}<br>{TT} samples at σ × 310 fb<sup>−1</sup> (Sherpa, AHADIC: one lepton charge, × 2); no backgrounds")
+        legend(f, f"{LJ_SEL}; {where}<br>CMS {TT} samples at σ × 310 fb<sup>−1</sup>, no backgrounds<br>Sherpa, AHADIC: one lepton charge, × 2")
         save(f, f"mcvar_{cat}")
 # ---- the b-decay shape against pT: b jets, other ttbar jets, outside the ttbar jets (MC truth)
 if "bshape_pt" in C:
@@ -378,7 +382,7 @@ if "bshape_pt" in C:
     label(f, rlabel="13.6 TeV", sim=True)
     ylabel(f, "share of b decays at |ℓ<sub>xy</sub>| &lt; 0.06 mm", chars=4)
     xlabel(f, "p<sub>T</sub>(J/ψ) [GeV]")
-    legend(f, f"{TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}")
+    legend(f, f"CMS {TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}")
     save(f, "mc_bshape_pt")
     # the b-jet shape reweighted to the signal's pT spectrum, against the signal's own
     LB = np.asarray(BP_["lxy_edges"], float)
@@ -394,7 +398,7 @@ if "bshape_pt" in C:
     headroom(f, float(np.max(ps_ / lw)), factor=1.5)
     label(f, rlabel="13.6 TeV", sim=True)
     ylabel(f, "fraction / mm", chars=4)
-    legend(f, f"{TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}")
+    legend(f, f"CMS {TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}")
     save(f, "mc_bshape_rew")
 
 # ---- the per-category b-decay templates (btemplate_mc.py -> btemplate.json): MC truth b decays against the fitted model of
@@ -424,7 +428,7 @@ if BT and "edges" in BT:
                                minor=dict(showgrid=False, ticks="")))
     label(f, rlabel="13.6 TeV", sim=True)
     ylabel(f, "fraction / mm", chars=4)
-    legend(f, f"{TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}; model: f G + (1 − f) e<sup>−ℓ/λ</sup> ⊗ G, G per candidate")
+    legend(f, f"CMS {TT} simulation, MC truth b-hadron decays, J/ψ window<br>{SEL}; model: f G + (1 − f) e<sup>−ℓ/λ</sup> ⊗ G, G per candidate")
     save(f, "mc_btmpl_shapes")
 
 # ---- the data fits with the b-jet template and with the per-category template (btmpl/: the fits with TTJ_BTEMPLATE)
@@ -485,7 +489,7 @@ for var, TC in TCV.items():
         ylabel(f, "mean fitted prompt J/ψ", chars=4)
         ylabel(f, "fit − truth", ax=axr)
         xlabel(f, "true prompt J/ψ outside the t̅t jets (mean per point)")
-        legend(f, f"toys from the {TT} simulation, data-sized, injected prompt J/ψ<br>{what}; {tmpl}<br>{pts[0]['n']} toys per point; bars: toy spread",
+        legend(f, f"toys from the CMS {TT} simulation, data-sized, injected prompt J/ψ<br>{what}; {tmpl}<br>{pts[0]['n']} toys per point; bars: toy spread",
                x=0.03, xanchor="left")
         save(f, f"mc_toys{var}_{sc}")
         # the pulls at the injected 100 J/psi against a unit Gaussian
@@ -506,7 +510,7 @@ for var, TC in TCV.items():
             headroom(f, max(max(P100[k]["pull_hist"]) for k, _, _, _ in FITC), factor=2.4)
             label(f, rlabel="13.6 TeV", sim=True)
             ylabel(f, f"toys / {pw:g}", chars=3)
-            legend(f, f"toys from the {TT} simulation, {P100['inject']} prompt J/ψ injected (true {P100['unbinned']['truth']:.0f})<br>{what}; {n_} toys<br>{tmpl}")
+            legend(f, f"toys from the CMS {TT} simulation, {P100['inject']} prompt J/ψ injected (true {P100['unbinned']['truth']:.0f})<br>{what}; {n_} toys<br>{tmpl}")
             save(f, f"mc_toypulls{var}_{sc}")
 # the two templates side by side: fit - truth in both scenarios; lower panel: the scenario dependence (data-like - as simulated)
 if len(TCV) == 2:
@@ -533,7 +537,7 @@ if len(TCV) == 2:
         ylabel(f, f"{nm}: fit − truth", chars=4)
         ylabel(f, "data-like − sim.", ax=axr)
         xlabel(f, f"true prompt J/ψ outside the {TT} jets (mean per point)")
-        legend(f, f"toys from the {TT} simulation, data-sized, injected prompt J/ψ; error: of the mean", x=0.03, xanchor="left")
+        legend(f, f"toys from the CMS {TT} simulation, data-sized, injected prompt J/ψ; error: of the mean", x=0.03, xanchor="left")
         save(f, f"mc_toys_tmplcmp_{k}")
 
 # ---- prompt per b-decay J/psi within each sample: does not depend on the normalisation of the sample
@@ -550,7 +554,7 @@ if "ratio" in GV and len(GV["gen"]) > 1:
         rr = [GV["ratio"][f"{g}|{cat}"] for g in gens]
         meas = [i for i, r in enumerate(rr) if r["upper"] is None]
         lim = [i for i, r in enumerate(rr) if r["upper"] is not None]
-        data_points(f, xg[meas] + dx, [rr[i]["r"] for i in meas], [rr[i]["err"] for i in meas], label=f"simulation, MC truth, {nm}", color=col, symbol=sym)
+        data_points(f, xg[meas] + dx, [rr[i]["r"] for i in meas], [rr[i]["err"] for i in meas], label=f"CMS sim., MC truth, {nm}", color=col, symbol=sym)
         if lim:
             f.add_trace(go.Scatter(x=xg[lim] + dx, y=[rr[i]["upper"] for i in lim], mode="markers", name=f"90% CL upper limit, {nm}", showlegend=False,
                                    marker=dict(symbol="triangle-down-open", size=pt2px(5), color=col)))
@@ -562,6 +566,6 @@ if "ratio" in GV and len(GV["gen"]) > 1:
     f.update_xaxes(range=[-0.6, len(gens) - 0.4], tickvals=list(xg), ticktext=[SHORT.get(g, g) for g in gens], tickangle=0)
     label(f)
     ylabel(f, "prompt J/ψ per b-decay J/ψ", chars=5)
-    legend(f, f"{LJ_SEL}; {TT} samples, ℓ + jets<br>within each sample: no normalisation; open triangles: 90% CL upper limits", x=0.03, xanchor="left")
+    legend(f, f"{LJ_SEL}; CMS {TT} samples, ℓ + jets<br>within each sample: no normalisation; open triangles: 90% CL upper limits", x=0.03, xanchor="left")
     save(f, "mcvar_ratio")
 print("figures written to", os.path.join(HERE, "figs"))

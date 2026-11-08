@@ -1,4 +1,6 @@
-"""Figures of data against Pythia8 + LETO (gen_compare.py -> gen_compare.json), cms-plotting skill via cmsdeck.py:
+"""Figures of data against our private generator-level Pythia 8 + LETO sample (genstudy/: not a CMS sample, no detector
+simulation; gen_compare.py -> gen_compare.json), cms-plotting skill via cmsdeck.py. Every legend and ratio label names it as
+generator level, apart from the CMS simulation of the other figures:
   figs/gencmp_yields.json  prompt J/psi in the other ttbar jets (vetoed) and outside the ttbar jets (signal), l + jets: data
                            against Pythia (default LDMEs, normalised with the b-decay J/psi) by origin, and DPS at sigma_eff = 15 mb;
                            lower panel data / (Pythia + DPS)
@@ -26,7 +28,8 @@ from plotlyhep._units import pt2px  # noqa: E402
 
 C = json.load(open(os.path.join(HERE, "gen_compare.json")))
 H, Y, SC = C["hists"], C["yields"], C["scaled"]
-ORIG = (("top decay", "Pythia 8 + LETO: top decay", SERIES["s1"]), ("ISR", f"Pythia 8 + LETO: {TT} production (ISR)", SERIES["s2"]))
+ORIG = (("top decay", "gen. Pythia + LETO: top decay", SERIES["s1"]), ("ISR", f"gen. Pythia + LETO: {TT} production (ISR)", SERIES["s2"]))
+GN = "Pythia 8 + LETO (gen level, private)"  # the legend header: our generator-level sample, not the CMS simulation
 SE = C["dps"]["sigma_eff_mb"]
 DPSN = f"2nd scattering, σ<sub>eff</sub> = {SE} mb (pileup J/ψ)"
 DATAN = "Data, prompt J/ψ (sPlot)"
@@ -70,7 +73,7 @@ f.add_trace(go.Bar(x=x0, y=dps_y, name=DPSN, marker=dict(color=SERIES["comb"], l
 pred = np.array([sum(Y[f"pythia_nominal_{c}_{on}"][0] for on, _, _ in ORIG) for c, _ in cats]) + dps_y
 pred_e = np.array([np.sqrt(sum(Y[f"pythia_nominal_{c}_{on}"][1] ** 2 for on, _, _ in ORIG)) for c, _ in cats])
 zt = np.array([sum(Y[f"pythia_z_{c}_{on}"][0] for on, _, _ in ORIG) for c, _ in cats]) + dps_y
-ZN = "Pythia, J/ψ z as in data (+ 2nd scattering)"
+ZN = "gen. Pythia + LETO, J/ψ z as in data (+ 2nd scattering)"
 f.add_trace(go.Scatter(x=x0, y=zt, mode="markers", name=ZN, legendrank=50, xaxis="x", yaxis="y",
                        marker=dict(symbol="diamond-open", size=pt2px(7), color=SERIES["total"], line=dict(width=pt2px(1.2)))))
 d, de = np.array([Y[f"data_{c}"][0] for c, _ in cats]), np.array([Y[f"data_{c}"][1] for c, _ in cats])
@@ -85,7 +88,7 @@ f.update_xaxes(range=[-0.6, len(cats) - 0.4], tickvals=list(x0), ticktext=[c[1] 
 label(f)
 ylabel(f, "prompt J/ψ", chars=4)
 xlabel(f, "where the prompt J/ψ is")
-legend(f, f"{LJ}; {NB1}<br>Pythia normalised with the b-decay J/ψ")
+legend(f, f"{GN}: normalised with the b-decay J/ψ<br>{LJ}; {NB1}")
 save(f, "gencmp_yields")
 
 
@@ -115,7 +118,7 @@ def dist(name, cat, v, xlab, ylab, xr=None, chars=5, log=False):
         f.data[-1].legendrank = 10 + k
         base = base + y
     tot, tot_e = base, np.sqrt(sum(x ** 2 for x in cerr))
-    zn = f"Pythia, J/ψ z as in data (× {sz:.2f})" + (" + 2nd scattering" if cat == "signal" else "")
+    zn = f"gen. Pythia + LETO, J/ψ z as in data (× {sz:.2f})" + (" + 2nd scattering" if cat == "signal" else "")
     step(f, e, ztot, SERIES["total"], zn, dash="dash")
     f.data[-1].legendrank = 50
     hd, ed = (np.asarray(a, float) / bw for a in H[f"data_{cat}_{v}"])
@@ -136,7 +139,7 @@ def dist(name, cat, v, xlab, ylab, xr=None, chars=5, log=False):
     ylabel(f, ylab, chars=chars)
     xlabel(f, xlab)
     where = f"outside the {TT} jets" if cat == "signal" else f"in the other {TT} jets"
-    legend(f, f"{LJ}; {NB1}<br>J/ψ {where}; last bin: overflow")
+    legend(f, f"{GN}<br>{LJ}; {NB1}; J/ψ {where}; last bin: overflow")
     save(f, name)
 
 

@@ -5,8 +5,8 @@ deck additions):
   figs/an_samesign.json               m(mu mu) of the J/psi candidates outside the ttbar jets (all vertices): opposite-sign pairs against same-sign
                                       pairs (the combinatorial control); opposite / same sign
   figs/an_signif_years.json           significance of the prompt component per year, l_xy fit and mass x l_xy fit, and all years
-  figs/an_leak_z.json                 z = pT(J/psi) / pT(jet) of the vetoed prompt J/psi: data (sWeights) against Pythia 8 + LETO
-                                      (gen_leak_z.json), unit area; data / Pythia = the z weights
+  figs/an_leak_z.json                 z = pT(J/psi) / pT(jet) of the vetoed prompt J/psi: data (sWeights) against our private
+                                      generator-level Pythia 8 + LETO (gen_leak_z.json; not a CMS sample), unit area; data / gen. Pythia = the z weights
 usage: python3 make_figs_an.py"""
 import json
 import os
@@ -18,7 +18,7 @@ import numpy as np
 warnings.filterwarnings("ignore")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from cmsdeck import (LJ, NB1, SERIES, TT, Z0, bin_label, canvas, data_points, draw_pull, draw_ratio, label, legend,  # noqa: E402
+from cmsdeck import (GEN, GENR, LJ, NB1, SERIES, TT, Z0, bin_label, canvas, data_points, draw_pull, draw_ratio, label, legend,  # noqa: E402
                      ratio_canvas, save, step, xlabel, ylabel, zero_line)
 
 SP = json.load(open(os.path.join(HERE, "splot.json")))
@@ -53,20 +53,20 @@ for dim, ed, xl in (("m", PJ["mass_edges"], "m(μ<sup>+</sup>μ<sup>−</sup>) [
     draw_pull(f, axp, c, d, tot, lo_, hi_, xl)
     save(f, f"an_unbinned_{dim}_vetoed")
 
-# ---- the J/psi momentum share in its jet: data against Pythia 8 + LETO
+# ---- the J/psi momentum share in its jet: data against the private gen-level Pythia 8 + LETO
 ze = np.asarray(GZ["z_edges"], float)
 ze[-1] = 1.0
 zw, zc = np.diff(ze), 0.5 * (ze[1:] + ze[:-1])
 dz, edz, pz = (np.asarray(GZ[k], float) for k in ("data_ttj", "data_ttj_err", "pythia_ttj"))
 f, ax, axr = ratio_canvas()
-step(f, ze, pz / zw, SERIES["s1"], "Pythia 8 + LETO, all origins", width=2.0)
+step(f, ze, pz / zw, SERIES["s1"], f"{GEN[0].upper() + GEN[1:]}, all origins", width=2.0)
 data_points(f, zc, dz / zw, edz / zw, label="Data, prompt J/ψ (sPlot)", ex=zw / 2)
 zero_line(f)
 f.update_layout(yaxis=dict(range=[-0.3, 1.8 * max(np.max((dz + edz) / zw), np.max(pz / zw))]))
 label(f)
 ylabel(f, "fraction / unit z", chars=4)
 legend(f, f"{LJ}; {NB1}; {Z0}<br>prompt J/ψ in the other {TT} jets (vetoed); unit area; last bin: z ≥ 0.6")
-draw_ratio(f, axr, zc, dz, edz, pz, None, lo=0.0, hi=1.0, xlab="z = p<sub>T</sub>(J/ψ) / p<sub>T</sub>(jet)", ylab="data / Pythia", rng=(-0.5, 4.0), ex=zw / 2)
+draw_ratio(f, axr, zc, dz, edz, pz, None, lo=0.0, hi=1.0, xlab="z = p<sub>T</sub>(J/ψ) / p<sub>T</sub>(jet)", ylab=f"data / {GENR}", rng=(-0.5, 4.0), ex=zw / 2)
 save(f, "an_leak_z")
 # ---- same-sign check: opposite- against same-sign pairs, J/psi outside the ttbar jets, all vertices, N_b >= 1
 R3 = json.load(open(os.path.join(HERE, "results_run3.json")))

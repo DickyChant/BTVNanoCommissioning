@@ -10,13 +10,14 @@ import os
 
 import numpy as np
 from plotlyhep._units import pt2px
+from plotlyhep.label import exp_text
 
 from cmsplot_plotly import (SERIES, bin_label, cms_label, data_points, draw_pull, figure, fill_between, fit_figure,  # noqa: F401
                             headroom, legend, line, region, step, xlabel, ylabel, zero_line)
 
 __all__ = ["SERIES", "bin_label", "cms_label", "data_points", "draw_pull", "fill_between", "headroom", "legend", "line", "region", "step",
            "xlabel", "ylabel", "zero_line", "canvas", "ratio_canvas", "label", "draw_ratio", "logx", "save", "SIZE", "RSIZE", "RL", "TT", "NB1",
-           "Z0", "CH3", "LJ", "LUMI"]
+           "Z0", "CH3", "LJ", "LUMI", "GEN", "GENR", "CMSSIM"]
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "figs")
 SIZE = (780, 500)    # single panel, two per slide (780 px: the skill's canvas width, room for the CMS and luminosity labels)
@@ -28,6 +29,11 @@ NB1 = "N<sub>b</sub> ≥ 1"
 Z0 = "|z<sub>0</sub>| &lt; 0.1 cm"
 CH3 = "μ + jets, e + jets, e μ"
 LJ = "μ + jets, e + jets"
+# two kinds of simulation, never to be mixed up: the official CMS samples (full detector simulation and reconstruction, the
+# code of the data pass) and our own generator-level Pythia 8 + LETO sample (genstudy/: no detector, not a CMS sample)
+CMSSIM = "CMS simulation"
+GEN = "private gen-level Pythia 8 + LETO"
+GENR = "gen. Pythia"  # in ratio labels: data / gen. Pythia
 
 
 def canvas(size=SIZE):
@@ -42,8 +48,13 @@ def ratio_canvas(size=RSIZE):
     return f, ax, axr
 
 
-def label(fig, rlabel=RL, sim=False):
-    cms_label(fig, com=13.6, data=not sim, rlabel=rlabel)
+def label(fig, rlabel=RL, sim=False, gen=False):
+    """CMS label (sim=True: 'CMS Simulation', for the CMS samples). gen=True: the private generator-level Pythia 8 + LETO
+    sample alone, which is not a CMS sample: no CMS label, the generator and 'private, gen level' instead"""
+    if gen:
+        exp_text(fig, "Pythia 8 + LETO", "private, gen level", loc=0, lumi=rlabel)
+    else:
+        cms_label(fig, com=13.6, data=not sim, rlabel=rlabel)
 
 
 def draw_ratio(fig, axr, centers, num, num_err, den, den_err=None, edges=None, lo=None, hi=None, xlab="", ylab="data / pred.",
