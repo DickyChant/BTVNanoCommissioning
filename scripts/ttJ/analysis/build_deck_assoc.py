@@ -550,14 +550,21 @@ if len(GV["gen"]) > 1 and "ratio" in GV:
     vrow = [[{"Pythia 8 CP5": "POWHEG + Pythia 8 CP5"}.get(g, g), rfmt(f"{g}|signal"), rfmt(f"{g}|inb")] for g in gens]
     vrow.append(["<b>Data (sPlot)</b>", f"<b>{GR['data|signal']['r']:.2f} ± {GR['data|signal']['err']:.2f}</b>", f"<b>{GR['data|inb']['r']:.3f} ± {GR['data|inb']['err']:.3f}</b>"])
     CR1 = GR.get("CP5 CR1|signal")
+
+    def SHB(g, cat):
+        """b-decay J/psi per luminosity against POWHEG + Pythia 8 of a one-lepton-charge Sherpa sample (x 2): 'NN%' fewer"""
+        G_ = GV["gen"]
+        if g not in G_:
+            return "–"
+        return f"{100 * (1 - 2 * G_[g][f'{cat}_bdecay'][0] / G_['Pythia 8 CP5'][f'{cat}_bdecay'][0]):.0f}%"
     content("sim-gen", "CMS simulation · generators (preliminary)", f"Prompt per b-decay J/ψ outside the {TB} jets: data {GR['data|signal']['r']:.2f}, POWHEG + Pythia 8 CP5 {GR['Pythia 8 CP5|signal']['r']:.3f}"
             + (f", CR1 {CR1['r']:.3f}" if CR1 and CR1.get('upper') is None else "") + "; Sherpa makes none",
             f'<div class="row" style="gap:36px"><div class="fig">{F("mcvar_ratio", "within each sample: normalisation-free", 0.66)}</div><div class="col">'
             + table(["CMS sample, ℓ + jets", f"prompt / b decay, outside {TB} jets", "in b jets"], vrow, widths=[31, 37, 32], num=(1, 2), hl=(len(vrow) - 1,))
             + "</div></div>"
-            + ul([f"<b>Sherpa</b> selects as many {TB} events per luminosity as POWHEG (±1%) but makes ≈ 30% fewer b-decay J/ψ in b jets (15% outside) and no prompt J/ψ; CR1 doubles the hadronisation's prompt J/ψ; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above CP5 outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets (AHADIC partly processed)"], "b s"),
+            + ul([f"<b>Sherpa</b> selects as many {TB} events per luminosity as POWHEG (±1%) but makes {SHB('Sherpa', 'inb')} fewer b-decay J/ψ in b jets ({SHB('Sherpa', 'signal')} outside; AHADIC {SHB('Sherpa AHADIC', 'inb')}, {SHB('Sherpa AHADIC', 'signal')}) and no prompt J/ψ; CR1 doubles the hadronisation's prompt J/ψ; the data stay {GR['data|signal']['r'] / GR['Pythia 8 CP5|signal']['r']:.0f}× above CP5 outside the {TB} jets, {GR['data|inb']['r'] / GR['Pythia 8 CP5|inb']['r']:.0f}× in b jets"], "b s"),
             t="cms",
-            notes="gen_variants.py on the l + jets samples processed so far (hadw/out_alt, clusters 897658 and 897660): MC truth prompt J/psi (no b-hadron ancestor) per MC truth "
+            notes="gen_variants.py on the l + jets samples (hadw/out_alt, cluster 897658, all jobs in): MC truth prompt J/psi (no b-hadron ancestor) per MC truth "
                   "b-decay J/psi in the selection of the fit, weighted; no prompt J/psi in a sample: 90% CL upper limit 2.3 / (raw b-decay count). Data: prompt / b-decay sWeights, l + jets. "
                   "Sherpa: the MEPS@NLO sample over-generates high jet multiplicities with lower weights (mean weight 2.8x the average at 2 jets, 0.5x at 6 jets; 17% negative), "
                   "so its selected candidates carry about half the mean weight; the weighted selection matches: selected l + jets events per pb within 1% of POWHEG + Pythia "
