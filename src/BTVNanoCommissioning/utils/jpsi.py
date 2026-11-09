@@ -45,6 +45,20 @@ LXY_PROMPT, LXY_NONPROMPT = ONIA[ONIUM]["lxy"]  # mm
 Z0_PV = 0.1  # cm
 
 
+# muon ID flags of the two muons in one integer each (bit i set: passes MUON_ID_BITS[i]); a flag missing from the NanoAOD
+# version leaves its bit 0. mediumPromptId = medium + |dxy| < 0.02 cm + |dz| < 0.1 cm, as the pair-level PV category.
+MUON_ID_BITS = ("looseId", "mediumId", "mediumPromptId", "tightId", "softId", "isGlobal", "isTracker", "highPurity")
+MUON_FIELDS = ("iso04_1", "iso04_2", "phi1", "phi2", "dxy1", "dxy2", "dz1", "dz2", "idbits1", "idbits2")  # leading, subleading muon
+
+
+def muon_id_bits(mu):
+    bits = 0
+    for i, f in enumerate(MUON_ID_BITS):
+        if f in mu.fields:
+            bits = bits + ak.values_astype(mu[f], np.int64) * (1 << i)
+    return bits
+
+
 def jpsi_muon_mask(events, exclude):
     """Loose-ID muons for the J/psi (no isolation); `exclude` masks the ttbar-lepton candidates on events.Muon."""
     mu = events.Muon
@@ -96,6 +110,10 @@ def find_jpsi(events, cand):
         # and the relative isolation with respect to the matched jet
         **{f"{k}{i}": ak.fill_none(ak.where(lead if i == 1 else ~lead, mu_a[f], mu_b[f]), -1.0)
            for i in (1, 2) for k, f in (("iso", "pfRelIso03_all"), ("miniiso", "miniPFRelIso_all"), ("jetiso", "jetRelIso"))},
+        # PF isolation in 0.4 (the muon POG working points, tight < 0.15), direction and impact parameters (cm) of the two muons
+        **{f"{k}{i}": ak.fill_none(ak.where(lead if i == 1 else ~lead, mu_a[f], mu_b[f]), -1.0 if k == "iso04_" else -99.0)
+           for i in (1, 2) for k, f in (("iso04_", "pfRelIso04_all"), ("phi", "phi"), ("dxy", "dxy"), ("dz", "dz"))},
+        **{f"idbits{i}": ak.fill_none(ak.where(lead if i == 1 else ~lead, muon_id_bits(mu_a), muon_id_bits(mu_b)), 0) for i in (1, 2)},
         "i1": i1,
         "i2": i2,
         **vtx,
@@ -278,7 +296,8 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
     selected events, <= 0 where undefined}, stored as jpsi_tt_<name> to show that the J/psi events are ttbar."""
     sel = ak.to_numpy(sel)
     pruned_ev["jpsi_valid"] = info["valid"][sel]
-    for k in ("os", "mass", "pt", "absy", "sip", "nmed", "pt1", "eta1", "pt2", "eta2", "iso1", "iso2", "miniiso1", "miniiso2", "jetiso1", "jetiso2"):
+    for k in ("os", "mass", "pt", "absy", "sip", "nmed", "pt1", "eta1", "pt2", "eta2", "iso1", "iso2", "miniiso1", "miniiso2", "jetiso1", "jetiso2",
+              *MUON_FIELDS):
         pruned_ev[f"jpsi_{k}"] = info[k][sel]
     pruned_ev["jpsi_mreg"] = mass_region(info["mass"][sel])
     for k in ("lxy", "lxyerr", "z0", "vchi2"):
@@ -314,7 +333,7 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
 # l_xy error, in bins of pT: all selected ttbar events with a dimuon in MASS_LO-MASS_HI, opposite and same sign
 CAND_FIELDS = ("os", "mass", "pt", "absy", "sip", "nmed", "pt1", "eta1", "pt2", "eta2", "iso1", "iso2", "miniiso1", "miniiso2",
                "jetiso1", "jetiso2", "mreg", "lxy", "lxyerr", "z0", "vchi2", "life", "truth", "cat", "drj", "z", "nb", "ntrack",
-               "sv_dr", "sv_ntrk", "sv_dlensig", "sv_mass", "sj_dr", "sj_pt", "sj_btag", "sj_muef", "eta", "phi")
+               "sv_dr", "sv_ntrk", "sv_dlensig", "sv_mass", "sj_dr", "sj_pt", "sj_btag", "sj_muef", "eta", "phi", *MUON_FIELDS)
 NJ = 8  # selected jets kept per candidate (pT order as in the workflow; -99 padded)
 JET_FIELDS = {"pt": "pt", "eta": "eta", "phi": "phi", "mass": "mass", "btag": "btagUParTAK4B", "muef": "muEF"}
 
