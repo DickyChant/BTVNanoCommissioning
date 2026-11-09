@@ -46,6 +46,11 @@ def campaign_map():
 # campaigns whose data are NanoAODv15 (field names and code paths of v15); "<campaign>v15" = the v15 re-NANO of 2022/2023
 V15_RENANO = ("Summer22", "Summer22EE", "Summer23", "Summer23BPix")
 NANOV15 = ("Summer24", "Winter25", "Prompt25", "Prompt26") + tuple(c + "v15" for c in V15_RENANO)
+# Run 2 UL re-NANO v15 (UL2016/17/18_NanoAODv15, RunIISummer20UL1xNanoAODv15): the v15 branches (superclusterEta, no MET or
+# Jet_jetId, promptMVA), Run 2 conditions: V15_SCHEMA selects the v15 code paths; the jet ID and the muon SF ranges keep their
+# Run 2 versions (not in NANOV15)
+RUN2_V15 = ("2016preVFP-UL", "2016postVFP-UL", "2017-UL", "2018-UL")
+V15_SCHEMA = NANOV15 + RUN2_V15
 
 
 def memory_usage_psutil():

@@ -24,6 +24,7 @@ from BTVNanoCommissioning.utils.histogramming.histogrammer import (
 from BTVNanoCommissioning.utils.array_writer import array_writer
 from BTVNanoCommissioning.utils.selection import (
     HLT_helper,
+    single_lepton_trigger,
     jet_id,
     btag_mu_idiso,
     btag_wp,
@@ -138,16 +139,16 @@ class NanoProcessor(processor.ProcessorABC):
         ## HLT
         # electron mirror of the hadronic-W study: single-electron trigger (EGamma PD), one tight electron
         elec = self.ttaddsel in ("tt_semilep_e", "tt_semilep_e_jpsi")
-        # (Ele30_WPTight_Gsf: the lowest unprescaled 2024 path, the one with EGM trigger SFs)
-        triggers = ["Ele30_WPTight_Gsf"] if elec else ["IsoMu24"]
+        # (Run 3 Ele30_WPTight_Gsf: the lowest unprescaled 2024 path, the one with EGM trigger SFs; Run 2: utils/selection.py)
+        triggers, ele_ptmin = single_lepton_trigger(self._campaign, elec)
         req_trig = HLT_helper(events, triggers)
 
         ## Muon cuts
         # muon twiki: https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonIdRun2
         if elec:
-            # MVA-isolation WP80 (the EGM recommendation with 2024 SFs), pT 5 GeV above the trigger threshold
+            # MVA-isolation WP80 (the EGM recommendation with 2024 SFs), pT above the trigger threshold (35 GeV, 38 in 2017)
             event_muon = events.Electron[
-                (events.Electron.pt > 35) & ele_mvatightid(events, self._campaign)
+                (events.Electron.pt > ele_ptmin) & ele_mvatightid(events, self._campaign)
             ]
         else:
             event_muon = events.Muon[

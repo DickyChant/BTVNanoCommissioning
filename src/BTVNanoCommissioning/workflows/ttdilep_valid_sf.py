@@ -1,4 +1,4 @@
-from BTVNanoCommissioning.helpers.func import NANOV15
+from BTVNanoCommissioning.helpers.func import V15_SCHEMA
 import os
 import awkward as ak, numpy as np
 from coffea import processor
@@ -28,6 +28,7 @@ from BTVNanoCommissioning.utils.selection import (
     btag_mu_idiso,
     btag_wp,
     HLT_helper,
+    single_lepton_trigger,
     jet_id,
     mu_promptmvaid,
     ele_promptmvaid,
@@ -144,8 +145,8 @@ class NanoProcessor(processor.ProcessorABC):
         elec = self.selMod == "tt_dilep_hadw_e"
         jpsi_mode = self.selMod == "tt_dilep_jpsi"
         if hadw:
-            # run on the Muon primary dataset like the semileptonic study
-            triggers = ["Ele30_WPTight_Gsf"] if elec else ["IsoMu24"]
+            # run on the Muon primary dataset like the semileptonic study (paths per year: utils/selection.py)
+            triggers, _ = single_lepton_trigger(self._campaign, elec)
         req_trig = HLT_helper(events, triggers)
         mutrig = (
             ak.values_astype(events.HLT.IsoMu24, np.int64)
@@ -155,7 +156,7 @@ class NanoProcessor(processor.ProcessorABC):
 
         ## Muon cuts
         # muon twiki: https://twiki.cern.ch/twiki/bin/view/CMS/SWGuideMuonIdRun2
-        if self._campaign in NANOV15:  # NanoAODv15
+        if self._campaign in V15_SCHEMA:  # NanoAODv15
             mu_sel = (events.Muon.pt > (30 if hadw else 25)) & (
                 # hadronic-W study: the muon ID and isolation of the semileptonic selection
                 btag_mu_idiso(events, self._campaign) if hadw else mu_promptmvaid(events, self._campaign)
@@ -174,7 +175,7 @@ class NanoProcessor(processor.ProcessorABC):
 
         ## Electron cuts
         # electron twiki: https://twiki.cern.ch/twiki/bin/viewauth/CMS/CutBasedElectronIdentificationRun2
-        if self._campaign in NANOV15:  # NanoAODv15
+        if self._campaign in V15_SCHEMA:  # NanoAODv15
             events.Electron = events.Electron[
                 (events.Electron.pt > (35 if elec else 25))  # 5 GeV above the Ele30 threshold
                 & ele_promptmvaid(events, self._campaign)

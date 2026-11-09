@@ -1,7 +1,23 @@
-from BTVNanoCommissioning.helpers.func import NANOV15, V15_RENANO
+from BTVNanoCommissioning.helpers.func import NANOV15, V15_RENANO, V15_SCHEMA
 import awkward as ak
 import numpy as np
 from BTVNanoCommissioning.helpers.func import campaign_map
+
+
+# single-lepton paths of the ttbar selections (the lowest unprescaled isolated ones) and the offline electron pT threshold
+# (3-8 GeV above the trigger); Run 3: IsoMu24 / Ele30_WPTight_Gsf (the one with EGM trigger SFs in 2024)
+SINGLE_LEPTON_HLT = {
+    "2016preVFP-UL": (["IsoMu24", "IsoTkMu24"], ["Ele27_WPTight_Gsf"], 35.0),
+    "2016postVFP-UL": (["IsoMu24", "IsoTkMu24"], ["Ele27_WPTight_Gsf"], 35.0),
+    "2017-UL": (["IsoMu27"], ["Ele35_WPTight_Gsf"], 38.0),
+    "2018-UL": (["IsoMu24"], ["Ele32_WPTight_Gsf"], 35.0),
+}
+
+
+def single_lepton_trigger(campaign, elec):
+    """(HLT paths, offline electron pT threshold) of the single-muon (elec False) or single-electron selection"""
+    mu, ele, ele_ptmin = SINGLE_LEPTON_HLT.get(campaign, (["IsoMu24"], ["Ele30_WPTight_Gsf"], 35.0))
+    return (ele if elec else mu), ele_ptmin
 
 
 def HLT_helper(events, triggers):
@@ -187,7 +203,7 @@ def jet_id(events, campaign, max_eta=2.5, min_pt=20):
 def ele_cuttightid(events, campaign):
     ele_etaSC = (
         events.Electron.eta + events.Electron.deltaEtaSC
-        if campaign not in NANOV15
+        if campaign not in V15_SCHEMA
         else events.Electron.superclusterEta
     )
     elemask = (
@@ -199,7 +215,7 @@ def ele_cuttightid(events, campaign):
 def ele_mvatightid(events, campaign):
     ele_etaSC = (
         events.Electron.eta + events.Electron.deltaEtaSC
-        if campaign not in NANOV15
+        if campaign not in V15_SCHEMA
         else events.Electron.superclusterEta
     )
     elemask = (
@@ -212,14 +228,14 @@ def ele_promptmvaid(events, campaign):
     # https://indico.cern.ch/event/1575017/contributions/6635248/attachments/3115862/5524310/EGammaAug08.pdf
     ele_etaSC = (
         events.Electron.eta + events.Electron.deltaEtaSC
-        if campaign not in NANOV15
+        if campaign not in V15_SCHEMA
         else events.Electron.superclusterEta
     )
     elemask = (
         (abs(ele_etaSC) < 1.4442) | ((abs(ele_etaSC) > 1.566) & (abs(ele_etaSC) < 2.5))
     ) & (
         events.Electron.promptMVA >= 0.9
-        if campaign in NANOV15
+        if campaign in V15_SCHEMA
         else 0.3
     )
     return elemask

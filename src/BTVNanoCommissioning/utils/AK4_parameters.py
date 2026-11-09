@@ -96,7 +96,7 @@ correction_config = {
     },
     "2017-UL": {
         "default": {
-            "DC": "Cert_294927-306462_13TeV_UL2017_Collisions17_MuonJSON.txt",
+            "DC": "Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt",  # golden: e + jets and jets need all subsystems
             "LUM": None,
             "JME": {
                 "MC": "Summer20UL17NanoV15_V1 Summer19UL17_JRV4",
