@@ -7,20 +7,41 @@ The number of its muons passing the medium ID is kept, so a medium-ID selection 
 The two muons of that pair are exempt from the jet-muon cleaning, so a jet containing the J/psi stays a jet.
 Signal: a J/psi not matched to a b jet (Delta R > 0.4 from every b candidate and every b-tagged selected jet),
 categories 1 and 2 below; the b-matched J/psi (category 0, mostly from b-hadron decays) are kept as a control.
+
+TTJ_ONIUM=upsilon (environment, read at import) makes the same pass for Upsilon(1S, 2S, 3S) -> mu mu: the pair closest
+to the Upsilon(1S) mass in 7-14 GeV, with that mass in l_xy. The fields and histograms keep their jpsi_* names, so
+every builder and fit reads either pass; an Upsilon pass is told apart by its mass range.
 """
+
+import os
 
 import awkward as ak
 import numpy as np
 
-MJPSI = 3.0969
-MASS_LO, MASS_HI = 2.0, 4.5
-# mass regions: 0 low sideband, 1 signal window, 2 high sideband, 3 elsewhere in 2.0-4.5 GeV
-MREG = ((2.60, 2.90), (2.95, 3.25), (3.30, 3.60))
+# per onium: PDG mass (pair choice and l_xy), pair mass range [GeV] and histogram bins, mass regions (low sideband,
+# window, high sideband, of equal widths), PDG ids for the MC truth, lifetime regions (l_xy [mm], see below)
+ONIA = {
+    "jpsi": dict(mass=3.0969, lo=2.0, hi=4.5, nbins=100, mreg=((2.60, 2.90), (2.95, 3.25), (3.30, 3.60)), pdg=(443,),
+                 lxy=(0.06, 0.10)),
+    # the window holds the three states (9.46, 10.02, 10.36 GeV, resolution 0.07-0.15 GeV); the l_xy regions scale
+    # with the mass (l_xy = m L_xy / p_T at the same resolution on L_xy)
+    "upsilon": dict(mass=9.4603, lo=7.0, hi=14.0, nbins=140, mreg=((7.50, 9.00), (9.15, 10.65), (10.80, 12.30)),
+                    pdg=(553, 100553, 200553), lxy=(0.18, 0.30)),
+}
+ONIUM = os.environ.get("TTJ_ONIUM", "jpsi")
+if ONIUM not in ONIA:
+    raise ValueError(f"TTJ_ONIUM={ONIUM}: expected one of {', '.join(ONIA)}")
+MJPSI = ONIA[ONIUM]["mass"]
+MASS_LO, MASS_HI, MASS_NBINS = ONIA[ONIUM]["lo"], ONIA[ONIUM]["hi"], ONIA[ONIUM]["nbins"]
+# mass regions: 0 low sideband, 1 signal window, 2 high sideband, 3 elsewhere in MASS_LO-MASS_HI
+MREG = ONIA[ONIUM]["mreg"]
+PDG_ONIUM = ONIA[ONIUM]["pdg"]
 DZ_MAX = 0.5  # |dz(mu1) - dz(mu2)| [cm]: both muons from one vertex (no dimuon vertex fit in NanoAOD)
 DR_JET = 0.4  # the J/psi is "in" a jet within this Delta R of the jet axis
 # lifetime regions (dimuon_vertex): on inclusive 2024 J/psi the prompt peak of l_xy has a core of about 20 um, so
 # |l_xy| < 0.06 mm is prompt-like and l_xy > 0.1 mm is dominated by b-hadron decays; |z0| > 0.1 cm points to another vertex
-LXY_PROMPT, LXY_NONPROMPT = 0.06, 0.10  # mm
+# (J/psi; the Upsilon regions are scaled with the mass)
+LXY_PROMPT, LXY_NONPROMPT = ONIA[ONIUM]["lxy"]  # mm
 Z0_PV = 0.1  # cm
 
 
@@ -155,7 +176,8 @@ def _flat(arr):
 
 def jpsi_truth(events, info):
     """MC truth of the dimuon: 0 prompt J/psi, 1 J/psi from a b-hadron decay, 2 no common J/psi parent of the
-    two muons (combinatorial or misidentified) or data."""
+    two muons (combinatorial or misidentified) or data (with TTJ_ONIUM=upsilon: an Upsilon(1S, 2S, 3S) parent;
+    bottomonium states above it do not count as b hadrons)."""
     n = len(events)
     out = np.full(n, 2, dtype=np.int64)
     if "GenPart" not in events.fields or "genPartIdx" not in events.Muon.fields:
@@ -184,13 +206,14 @@ def jpsi_truth(events, info):
 
     p1, p2 = mother(gen_of(i1)), mother(gen_of(i2))
     pdg_at = lambda c: np.where(c >= 0, pdg[np.clip(goff + c, 0, len(pdg) - 1)], 0)  # noqa: E731
-    matched = (p1 >= 0) & (p1 == p2) & (pdg_at(p1) == 443)
+    matched = (p1 >= 0) & (p1 == p2) & np.isin(pdg_at(p1), PDG_ONIUM)
     from_b = np.zeros(n, dtype=bool)
     cur = np.where(matched, p1, -1)
     for _ in range(40):
         cur = np.where(cur >= 0, mom[np.clip(goff + cur, 0, len(mom) - 1)], -1)
         a = np.abs(pdg_at(cur))
-        from_b |= (cur >= 0) & (((a >= 500) & (a < 600)) | ((a >= 5000) & (a < 6000)))
+        bbbar = (a % 1000 > 550) & (a % 1000 < 560)  # bottomonium (551, 553, 10551, 100553, ...)
+        from_b |= (cur >= 0) & (((a >= 500) & (a < 600) & ~bbbar) | ((a >= 5000) & (a < 6000)))
         if not (cur >= 0).any():
             break
     out[matched] = np.where(from_b[matched], 1, 0)
@@ -288,7 +311,7 @@ def store(pruned_ev, info, sel, assoc, leptons, nb, ntrack, ttkin):
 
 
 # one row per J/psi candidate (output "jpsi_cands"), for unbinned fits of the mass and l_xy with the per-candidate
-# l_xy error, in bins of pT: all selected ttbar events with a dimuon in 2.0-4.5 GeV, opposite and same sign
+# l_xy error, in bins of pT: all selected ttbar events with a dimuon in MASS_LO-MASS_HI, opposite and same sign
 CAND_FIELDS = ("os", "mass", "pt", "absy", "sip", "nmed", "pt1", "eta1", "pt2", "eta2", "iso1", "iso2", "miniiso1", "miniiso2",
                "jetiso1", "jetiso2", "mreg", "lxy", "lxyerr", "z0", "vchi2", "life", "truth", "cat", "drj", "z", "nb", "ntrack",
                "sv_dr", "sv_ntrk", "sv_dlensig", "sv_mass", "sj_dr", "sj_pt", "sj_btag", "sj_muef", "eta", "phi")

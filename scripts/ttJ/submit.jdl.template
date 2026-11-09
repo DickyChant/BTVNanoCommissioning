@@ -2,7 +2,7 @@
 # @...@ placeholders, and submit from lxplus:  module load lxbatch/eossubmit && condor_submit submit.jdl
 # The jobs install the pixi environment of @CODE@/pixi.lock themselves, offline from the package cache in @PIXICACHE@
 # (scripts/ttJ/pixi_cache.sh @PIXICACHE@, once per lock file); to use a conda environment instead, add TTJ_CONDA=<env>
-# to "environment".
+# to "environment"; TTJ_ONIUM=upsilon makes an Upsilon -> mu mu pass (utils/jpsi.py).
 executable            = @CODE@/scripts/ttJ/run_job.sh
 arguments             = $(name) $(syst) $(campaign) $(year)
 environment           = "TTJ_WF=@WF@ TTJ_CODE=@CODE@ TTJ_SUBJSON=@SUBJSON@ TTJ_OUT=@OUT@ TTJ_PIXI_CACHE=@PIXICACHE@ X509_USER_PROXY=@PROXY@"

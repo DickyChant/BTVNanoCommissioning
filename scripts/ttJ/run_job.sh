@@ -14,6 +14,7 @@
 #   TTJ_PIXI     optional: pixi version on /cvmfs/cms-griddata.cern.ch/cat/sw/pixi (default v0.84.0)
 #   X509_USER_PROXY  grid proxy readable from the batch node (for xrootd)
 #   TTJ_WF       workflow (default ttJ; ttJ_bph for BPHNano of the low-mass double-muon parking)
+#   TTJ_ONIUM    optional: upsilon for Upsilon(1S, 2S, 3S) -> mu mu instead of the J/psi (utils/jpsi.py; read by the runner)
 NAME=$1; SYST=${2:-False}; WF=${TTJ_WF:-ttJ}; CAMPAIGN=${3:-${TTJ_CAMPAIGN:-Summer24}}; YEAR=${4:-${TTJ_YEAR:-2024}}
 SUB=$TTJ_SUBJSON/${NAME}.json
 echo "[job] host=$(hostname) wf=$WF name=$NAME isSyst=$SYST campaign=$CAMPAIGN year=$YEAR start=$(date)"

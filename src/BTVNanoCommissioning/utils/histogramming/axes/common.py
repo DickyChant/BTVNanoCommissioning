@@ -1,5 +1,7 @@
 import hist
 
+from BTVNanoCommissioning.utils import jpsi as JPSI
+
 axes = {
     "flav": hist.axis.IntCategory([0, 1, 4, 5, 6], name="flav", label="Genflavour"),
     "syst": hist.axis.StrCategory([], name="syst", growth=True),
@@ -34,8 +36,8 @@ axes = {
     "dg_dr": hist.axis.Regular(30, 0, 6, name="dr", label="$\\Delta R(\\ell, b)$"),
     "dg_bpt": hist.axis.Regular(40, 0, 400, name="bpt", label="b-jet $p_{T}$ [GeV]"),
     # J/psi -> mu mu on top of the ttbar selections (utils/jpsi.py)
-    "mjpsi": hist.axis.Regular(100, 2.0, 4.5, name="mass", label="$m(\\mu\\mu)$ [GeV]"),
-    "mreg": hist.axis.IntCategory([0, 1, 2, 3], name="mreg", label="m(mu mu): 0 2.60-2.90, 1 2.95-3.25, 2 3.30-3.60, 3 other"),
+    "mjpsi": hist.axis.Regular(JPSI.MASS_NBINS, JPSI.MASS_LO, JPSI.MASS_HI, name="mass", label="$m(\\mu\\mu)$ [GeV]"),
+    "mreg": hist.axis.IntCategory([0, 1, 2, 3], name="mreg", label="m(mu mu): " + ", ".join(f"{k} {lo:.2f}-{hi:.2f}" for k, (lo, hi) in enumerate(JPSI.MREG)) + ", 3 other"),
     "jpsinmed": hist.axis.IntCategory([0, 1, 2], name="nmed", label="J/psi muons passing the medium ID"),
     "jpsicat": hist.axis.IntCategory([0, 1, 2], name="jpsicat", label="J/psi: 0 matched to a b jet (control), 1 in another jet, 2 in no jet"),
     "jpsitruth": hist.axis.IntCategory([0, 1, 2], name="jpsitruth", label="MC: 0 prompt J/psi, 1 from b, 2 no J/psi / data"),
