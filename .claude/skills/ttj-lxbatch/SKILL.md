@@ -56,6 +56,9 @@ python3 scripts/ttJ/make_jobs.py <submit>/subjson <submit>/jobs.txt 10 Muon2024.
 Fileset JSONs come from `scripts/fetch.py` (DAS). Copy `scripts/ttJ/submit.jdl.template` to `<submit>/submit.jdl`, fill
 the `@...@` placeholders, and create `<submit>/logs` and `<submit>/out`. Keep `max_materialize` at about 400 (all jobs
 read the code on EOS) and `transfer_output_files = ""`: otherwise condor copies the job's pixi environment back.
+Right after submitting, run `condor_q -name <schedd> <cluster>.0 -better-analyze`: in November 2026 late
+materialization (`max_materialize`) on the eossubmit schedd wrapped the job requirements into a loop that matched no
+machine ("never PreVerRequirements"), and only a submission without `max_materialize` started.
 Before a pass, point the files with a replica on CERN EOS at `root://eoscms.cern.ch//eos/cms/store/...` in the
 sub-jsons. Through the redirectors some files fail with "Redirect limit has been reached", and FUSE `/eos/...` paths
 can stall a batch job for hours.
