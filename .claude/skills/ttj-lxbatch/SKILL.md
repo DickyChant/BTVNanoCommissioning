@@ -31,6 +31,9 @@ cache in `$TMPDIR`. Every batch job installs the environment on its local disk, 
   never to the AFS home.
 - **Code is read at run time.** Jobs import `<code>` while they run: never edit it while jobs are queued or running.
   For a new campaign copy a fresh checkout (e.g. `<code>_v2`).
+- **`git archive` leaves out `src/BTVNanoCommissioning/version.py`** (the setuptools_scm stub is not in git): copy it into
+  the new `<code>` before submitting, or every job fails with `No module named 'BTVNanoCommissioning.version'`. The smoke
+  test must run from `<code>` itself, not from the repo, to catch this.
 
 ## 1. Smoke test (always first)
 
