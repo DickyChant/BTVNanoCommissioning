@@ -42,6 +42,7 @@ the LCG_110 view (its Pythia python bindings).
 | `TTJ_REPO` | the checkout with `pixi.toml` (default: this checkout, when the scripts run in place) |
 | `TTJ_AUTHOR` | name on the deck cover and footer (default: none) |
 | `TTJ_PREV_SPLOT` | the unbinned fit of the previous deck (the 6 Nov signal definition), quoted on the slides |
+| `TTJ_FULLDECK` | `build_deck_program.py`: the files/ of the full deck whose numbers and figures it summarises (default `../../2026Nov07_jpsi_assoc/files`) |
 | `FIG_PREVIEW` | directory for PNG previews of every figure (outside the web area); not set: JSON only |
 | `FIG_ONLY` | comma-separated name prefixes: PNG previews only for those figures |
 | `TTJ_BTEMPLATE` | `btemplate.json`: the fits use the per-category b-decay shape (default: the b-jet shape) |
@@ -81,6 +82,7 @@ pixi run -e analysis --manifest-path $TTJ_REPO/pixi.toml python stage_an.py <an_
 | closure of the prompt fits with toys (the data's candidate count per channel, category, sign and mass region drawn from the simulation, injected prompt J/psi, the whole chain per toy; hours, run by hand) | `toy_closure.py` (`--retry-failed`; with `TTJ_BTEMPLATE` for the per-category template), `toy_summary.py` | `toys.jsonl`, `toy_closure.json`, `toy_closure_btmpl.json` |
 | figures | `make_figs_run3.py`, `make_figs_balance.py`, `make_figs_assoc.py`, `make_figs_gencmp.py`, `make_figs_mc.py`, `make_figs_an.py` (with `cmsdeck.py` on the cms-plotting skill's `cmsplot_plotly.py`) | `figs/*.json` |
 | deck | `build_deck_assoc.py` (with `deck_lib.py`) | `slides.html`, `../index.html` |
+| program summary deck (for a discussion: history, result, decisions) | `build_deck_program.py`: imports `build_deck_assoc.py` of `TTJ_FULLDECK` for its numbers, copies the figures it shows | `slides.html`, `../index.html`, `figs/` |
 | analysis-note figures | `stage_an.py` | `<an dir>/*.pdf`, `MANIFEST.txt`, `MC_SAMPLES.txt` |
 | animation (the project's stand-alone video, not part of the slides) | `anim/ttjpsi.py` (`pixi run -e anim manim render ...`) | one video at a fixed web location, overwritten on every update |
 | its narration: the text per segment (`narration()` in the scene, from the same numbers as the frames), speech, mixing, a transcription check | `ttjpsi.py --narration voice/narration.json`, `anim/voice.py` (Kokoro; the scene holds each segment until it is spoken), `anim/mix.py` (voice + subtitles on the joined video), `anim/check_voice.py` (faster-whisper) | `anim/voice/` (not in git), the narrated mp4 and its `.srt` |
