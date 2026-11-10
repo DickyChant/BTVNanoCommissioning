@@ -94,6 +94,13 @@ find <eos-out> -mindepth 2 -name '*.coffea' | wc -l                             
 - A job with little CPU time after hours of wall time (`condor_q <cluster> -af RemoteUserCpu RemoteWallClockTime`)
   is stalled on file reads: remove it and resubmit it with XRootD URLs.
 - Poll every 10-20 min in a background loop, not in a tight loop; report progress as done / total with a time estimate.
+- A tail of jobs that stall again after a restart (same data sets) is the redirector sending their files to a slow or dead
+  server. Check `/eos/cms<lfn>` first (files reach CERN later; fetch scripts must rewrite those to `root://eoscms.cern.ch//eos/cms/store/...`),
+  else take the replica sites per file from DAS (`dasgoclient -query="site file=<lfn>"`), probe the sites' xrootd doors
+  (`xrdcp -s root://<door>/<lfn> - | head -c 30000000`), check each chosen door with `xrdfs <door> stat <lfn>`, write the
+  door URLs into the stalled jobs' sub-jsons (keep a tar of the originals) and restart them with `condor_vacate_job -fast`.
+  run_job.sh falls back only from xrootd-cms.infn.it URLs, so a direct door must be checked first.
+- lxplus is load-balanced: a file copied to one node's /tmp is not on the next ssh's node; pass lists through EOS.
 
 ## 5. Resubmit what is missing
 
