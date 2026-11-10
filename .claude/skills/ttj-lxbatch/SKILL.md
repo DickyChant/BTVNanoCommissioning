@@ -108,6 +108,14 @@ When the cluster has left the queue: list the names in `jobs.txt` without `<eos-
 to `jobs_resub.txt`, and submit a copy of submit.jdl that queues from it. Look at a few `.err` files first: a
 systematic error needs a fix, not a resubmission.
 
+A job with an output can still have lost files: runner.py drops every input file whose `uproot.open` fails at the
+validation step ("ERROR validating file: ..., XRootD error: [ERROR] Operation expired") and exits 0. In November 2026
+about 9% of a 4872-job pass lost 5% of its files this way, nearly all on eoscms, in the burst of the first hour.
+`python3 scripts/ttJ/recover_dropped.py <submit> <eos-out> <subjson>` lists them; with `--write <subjson>_rec <submit>_rec`
+it writes sub-jsons of only the dropped files under the same job names. Submit them into `<eos-out>_rec`, so that
+downstream lists keyed on the job name still apply, and add `<eos-out>_rec` to the summaries.
+`next_job_start_delay` (to spread the starts) is refused by the CERN schedds.
+
 ## 6. Results
 
 ```bash
