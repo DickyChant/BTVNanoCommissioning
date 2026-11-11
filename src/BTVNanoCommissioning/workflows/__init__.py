@@ -1,9 +1,11 @@
 """Workflows of the ttbar + J/psi -> mu mu study (branch ttJ). Each ttbar channel of the hadronic-W / m(l, b) study
-with one loose-ID muon pair near the J/psi mass (utils/jpsi.py); "ttJ" runs all three in one pass (workflows/ttJ.py)."""
+with one loose-ID muon pair near the J/psi mass (utils/jpsi.py); "ttJ" runs all three in one pass (workflows/ttJ.py).
+"Vonium": W / Z + the same onium pair, triggered by the W / Z lepton (workflows/Vonium.py)."""
 from functools import partial
 
 from BTVNanoCommissioning.workflows.ttdilep_valid_sf import NanoProcessor as TTdilepValidSFProcessor
 from BTVNanoCommissioning.workflows.ttJ import NanoProcessor as TTJProcessor
+from BTVNanoCommissioning.workflows.Vonium import NanoProcessor as VoniumProcessor
 from BTVNanoCommissioning.workflows.ttsemilep_valid_sf import NanoProcessor as TTsemilepValidSFProcessor
 
 workflows = {}
@@ -15,5 +17,7 @@ workflows["ttJ_ejets"] = partial(TTsemilepValidSFProcessor, selectionModifier="t
 workflows["ttJ_emu"] = partial(TTdilepValidSFProcessor, selectionModifier="tt_dilep_jpsi")
 # the three channels in one pass (data: the channels of its primary dataset)
 workflows["ttJ"] = TTJProcessor
+# W -> l nu and Z -> l l (l = mu: Muon PD, e: EGamma PD) + the onium pair, one pass
+workflows["Vonium"] = VoniumProcessor
 
 __all__ = ["workflows"]
