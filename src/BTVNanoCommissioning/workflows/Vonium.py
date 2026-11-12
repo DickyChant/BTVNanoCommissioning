@@ -14,9 +14,10 @@ PUPPI MET), the MET filters. No jet multiplicity, and the jet veto map does not 
 Z: the opposite-sign pair of the trigger flavour closest to the Z mass in 60-120 GeV, both leptons of the ttbar
 definition above 15 GeV and the leading one above the trigger threshold; no MET requirement.
 The onium -> mu mu pair is built from the loose-ID muons that are not the W / Z leptons (utils/jpsi.py, no isolation);
-the onium -> e e pair, independently, from the electrons of the eta -> mu mu e e analysis that are not the W / Z leptons
-(utils/jpsi.onium_electron_mask: MVA no-isolation WP90, conversion veto, no missing inner hit, |eta| < 2.5 outside
-1.44-1.57, pT > 5 GeV), so that its electron scale factors carry over. Other leptons of the ttbar definitions above 15 GeV
+the onium -> e e pair, independently, from the electron legs of the eta(') -> mu mu e e analysis that are not the W / Z
+leptons (utils/jpsi.onium_electron_legs: the standard electron with Winter22 no-isolation MVA > -0.95, else the low-pT
+electron of the same track with ID > 0; pT > 2 GeV, conversion veto, no missing inner hit, |eta| < 2.5 outside 1.44-1.56),
+so that its J/psi -> e e scale factors carry over ("nmed" counts the standard legs). Other leptons of the ttbar definitions above 15 GeV
 (either flavour, the leptons of the pair of the table apart) are counted, not cut on ("nextra"): a W with nextra = 0 is
 not in a Z channel, and no event is in both W channels.
 
@@ -147,8 +148,10 @@ class NanoProcessor(processor.ProcessorABC):
         info, pair = ONI.find_jpsi(e, ONI.jpsi_muon_mask(e, vmu))
         info["truth"] = ONI.jpsi_truth(e, info)
         nextra = _np(ak.sum(tmu & ~vmu & ~pair, axis=1) + ak.sum(tel & ~vel, axis=1), 0)
-        info_ee, pair_ee = ONI.find_jpsi(e, ONI.onium_electron_mask(e, vel), coll="Electron", mass_range=ONI.EE_RANGE)
-        info_ee["truth"] = ONI.jpsi_truth(e, info_ee, coll="Electron")
+        legs = ONI.onium_electron_legs(e, vel)
+        info_ee, pair_ee = ONI.find_jpsi(e, ak.ones_like(legs.pt, dtype=bool), coll=legs, mass_range=ONI.EE_RANGE)
+        info_ee["truth"] = ONI.jpsi_truth(e, info_ee, coll=legs)
+        pair_ee = ONI.electron_pair_mask(e, legs, pair_ee)
         nextra_ee = _np(ak.sum(tmu & ~vmu, axis=1) + ak.sum(tel & ~vel & ~pair_ee, axis=1), 0)
         Lsel = e.Electron if elec else e.Muon
         l1 = ak.firsts(Lsel[ak.local_index(Lsel.pt) == i1])

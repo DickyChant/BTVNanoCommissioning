@@ -12,10 +12,9 @@ TTJ_ONIUM=upsilon (environment, read at import) makes the same pass for Upsilon(
 to the Upsilon(1S) mass in 7-14 GeV, with that mass in l_xy. The fields and histograms keep their jpsi_* names, so
 every builder and fit reads either pass; an Upsilon pass is told apart by its mass range.
 
-The onium -> e e pair (find_jpsi with coll="Electron", from the electrons of onium_electron_mask) takes the electrons of
-the eta -> mu mu e e analysis (Greenberg et al., eta2mu2eSkimmer), so that its electron scale factors (EGM wp90noiso ID
-and RecoBelow20 reconstruction) or their measurement carry over; its mass range (EE_RANGE) is wider below the peak for
-the bremsstrahlung tail.
+The onium -> e e pair (find_jpsi on the legs of onium_electron_legs) takes the electron legs of the eta(') -> mu mu e e
+analysis (4trketap, selection 'incl_a'), so that its J/psi -> e e tag-and-probe scale factors (calib/ele_calib_v5.json,
+per leg in pT) carry over; its mass range (EE_RANGE) is wider below the peak for the bremsstrahlung tail.
 """
 
 import os
@@ -55,11 +54,16 @@ Z0_PV = 0.1  # cm
 # version leaves its bit 0. mediumPromptId = medium + |dxy| < 0.02 cm + |dz| < 0.1 cm, as the pair-level PV category.
 MUON_ID_BITS = ("looseId", "mediumId", "mediumPromptId", "tightId", "softId", "isGlobal", "isTracker", "highPurity")
 MUON_FIELDS = ("iso04_1", "iso04_2", "phi1", "phi2", "dxy1", "dxy2", "dz1", "dz2", "idbits1", "idbits2")  # leading, subleading muon
-# the same for the electrons of an e e pair (idbits*: ELE_ID_BITS; "nmed" counts mvaNoIso_WP80), plus the MVA no-isolation
-# score and the supercluster eta (eta + deltaEtaSC, the variable of the EGM scale factors) of each electron
+# the same for the electron legs of an e e pair (idbits*: ELE_ID_BITS, 0 for a low-pT leg but convVeto; "nmed" counts the
+# standard legs), plus per leg its ID score (mva: Winter22 no-isolation MVA of a standard leg, LowPtElectron BDT of a low-pT
+# leg), the supercluster eta (eta + deltaEtaSC) and the kind (src: 0 standard, 1 low pT)
 ELE_ID_BITS = ("mvaNoIso_WP90", "mvaNoIso_WP80", "mvaIso_WP90", "mvaIso_WP80", "convVeto", "isPFcand", "isEcalDriven", "isEB")
-ELE_FIELDS = ("mva1", "mva2", "sceta1", "sceta2")
-EE_ETA_GAP = (1.44, 1.57)  # the barrel-endcap transition removed by the eta -> mu mu e e analysis (on eta)
+ELE_FIELDS = ("mva1", "mva2", "sceta1", "sceta2", "src1", "src2")
+EE_ETA_GAP = (1.44, 1.56)  # the barrel-endcap transition removed by the eta(') -> mu mu e e analysis (on eta)
+ELE_MVA_MIN = -0.95  # Winter22 no-isolation MVA (raw score) of a standard leg
+LOWPT_ID_MIN = 0.0  # LowPtElectron ID (BDT raw score) of a low-pT leg
+EE_DR_SAME = 0.02  # a LowPtElectron within this Delta R of an Electron is the same track when electronIdx is not set
+LEG_FLOATS = ("dxy", "dxyErr", "dz", "dzErr", "miniPFRelIso_all", "pfRelIso03_all", "pfRelIso04_all", "jetRelIso")
 
 
 def muon_id_bits(mu, names=MUON_ID_BITS):
@@ -76,24 +80,58 @@ def jpsi_muon_mask(events, exclude):
     return mu.looseId & (mu.pt > 3) & (abs(mu.eta) < 2.4) & ~exclude
 
 
-def onium_electron_mask(events, exclude):
-    """The electrons of the eta -> mu mu e e analysis (eta2mu2eSkimmer + plot_2mu2e.py, nominal): MVA no-isolation WP90
-    (Run 3 NanoAOD: Winter22 V1, the ID of the EGM wp90noiso scale factors), conversion veto (passConversionVeto, the
-    analysis's hasMatchedConversion with the beam spot), no missing inner hit, |eta| < 2.5 outside 1.44-1.57; no isolation.
-    pT > 5 GeV is the NanoAOD Electron threshold (the analysis, on MINIAOD, went down to 2 GeV). `exclude` masks the W / Z
-    electrons on events.Electron."""
-    el = events.Electron
-    aeta = abs(el.eta)
-    gap = (aeta > EE_ETA_GAP[0]) & (aeta < EE_ETA_GAP[1])
-    return el.mvaNoIso_WP90 & el.convVeto & (el.lostHits == 0) & (el.pt > 5) & (aeta < 2.5) & ~gap & ~exclude
+def onium_electron_legs(events, exclude):
+    """The electron legs of the eta(') -> mu mu e e analysis (4trketap 'incl_a', standard first): per track the standard
+    (GED) electron if it passes, otherwise the low-pT electron of the same track. Both: pT > 2 GeV, |eta| < 2.5 outside
+    1.44-1.56, no missing inner hit, conversion veto; standard: Winter22 no-isolation MVA > -0.95 (recomputed at NANO time
+    with the corrected weights, as the analysis does); low pT: LowPtElectron ID > 0. No isolation, no dxy / dz.
+    NanoAOD keeps standard electrons from pT > 5 GeV only, so below it every leg is a low-pT one. The Electron of the same
+    track is the NanoAOD overlap link (electronIdx), else the nearest within EE_DR_SAME. `exclude` masks the W / Z
+    electrons on events.Electron (with their low-pT twins).
+    Returns the legs (PtEtaPhiMCandidate) with src (0 standard, 1 low pT), std, mva (the ID score of its kind), sceta,
+    eidx (its Electron, -1 if none), the ELE_ID_BITS flags and the LEG_FLOATS (-1 where the collection has none)."""
+    from coffea.nanoevents.methods import candidate
+
+    el, lp = events.Electron, events.LowPtElectron
+
+    def accept(x):
+        aeta = abs(x.eta)
+        gap = (aeta > EE_ETA_GAP[0]) & (aeta < EE_ETA_GAP[1])
+        return (x.pt > 2) & (aeta < 2.5) & ~gap & (x.lostHits == 0) & x.convVeto
+
+    std = accept(el) & (el.mvaNoIso > ELE_MVA_MIN) & ~exclude
+    pr = ak.cartesian([lp, el], nested=True)
+    dphi = (pr["0"].phi - pr["1"].phi + np.pi) % (2 * np.pi) - np.pi
+    dr = np.hypot(pr["0"].eta - pr["1"].eta, dphi)
+    near = ak.fill_none(ak.argmin(dr, axis=2), -1)
+    twin = ak.where(lp.electronIdx >= 0, lp.electronIdx, ak.where(ak.fill_none(ak.min(dr, axis=2), 9.0) < EE_DR_SAME, near, -1))
+    twin_m = ak.mask(twin, twin >= 0)
+    taken = ak.fill_none(std[twin_m], False) | ak.fill_none(exclude[twin_m], False)
+    low = accept(lp) & (lp.ID > LOWPT_ID_MIN) & ~taken
+
+    def pack(x, mask, src, mva, eidx):
+        x, n = x[mask], ak.zeros_like(x.pt[mask])
+        rec = {"pt": x.pt, "eta": x.eta, "phi": x.phi, "mass": x.mass, "charge": x.charge,
+               "src": ak.values_astype(n, np.int64) + src, "std": n == 0 if src == 0 else n != 0,
+               "mva": mva[mask], "sceta": x.eta + x.deltaEtaSC, "eidx": ak.values_astype(eidx[mask], np.int64)}
+        rec.update({f: x[f] if f in x.fields else n - 1.0 for f in LEG_FLOATS})
+        rec.update({f: x[f] if f in x.fields else n != 0 for f in ELE_ID_BITS})
+        # 3D impact-parameter significance (LowPtElectron has none: from dxy and dz)
+        rec["sip3d"] = x.sip3d if "sip3d" in x.fields else np.hypot(x.dxy, x.dz) / np.maximum(np.hypot(x.dxyErr, x.dzErr), 1e-6)
+        if "genPartIdx" in el.fields and "genPartIdx" in lp.fields:
+            rec["genPartIdx"] = x.genPartIdx
+        return ak.zip(rec)
+
+    legs = ak.concatenate([pack(el, std, 0, el.mvaNoIso, ak.local_index(el.pt)), pack(lp, low, 1, lp.ID, twin)], axis=1)
+    return ak.with_name(legs, "PtEtaPhiMCandidate", behavior=candidate.behavior)
 
 
 def find_jpsi(events, cand, coll="Muon", mass_range=None):
-    """Best dimuon per event from the muons in mask `cand` (on events.Muon); with coll="Electron" the best e e pair from
-    the electrons in `cand` (on events.Electron) in `mass_range` (default: the onium's mu mu range).
-    Returns a dict of per-event arrays (invalid events carry dummy values) and the mask of its two leptons on events[coll]."""
-    mu = events[coll]
-    ele = coll == "Electron"
+    """Best dimuon per event from the muons in mask `cand` (on events.Muon); with coll = the legs of onium_electron_legs
+    the best e e pair from the legs in `cand` in `mass_range` (default: the onium's mu mu range).
+    Returns a dict of per-event arrays (invalid events carry dummy values) and the mask of its two leptons on the collection."""
+    ele = not isinstance(coll, str)
+    mu = coll if ele else events[coll]
     lo, hi = mass_range if mass_range is not None else (MASS_LO, MASS_HI)
     lidx = ak.local_index(mu.pt)
     pairs = ak.combinations(lidx[cand], 2, fields=["i1", "i2"])
@@ -114,7 +152,7 @@ def find_jpsi(events, cand, coll="Muon", mass_range=None):
     energy, pz = jp.energy, jp.z
     rap = 0.5 * np.log((energy + pz) / np.maximum(energy - pz, 1e-9))
     sip = np.maximum(ak.firsts(m1.sip3d[best]), ak.firsts(m2.sip3d[best]))
-    good = "mvaNoIso_WP80" if ele else "mediumId"
+    good = "std" if ele else "mediumId"
     nmed = ak.values_astype(m1[good], np.int64) + ak.values_astype(m2[good], np.int64)
     lead = ak.firsts(m1[best]).pt >= ak.firsts(m2[best]).pt
     mu_a, mu_b = ak.firsts(m1[best]), ak.firsts(m2[best])
@@ -148,12 +186,17 @@ def find_jpsi(events, cand, coll="Muon", mass_range=None):
         **vtx,
     }
     if ele:
-        sc_a, sc_b = mu_a.eta + mu_a.deltaEtaSC, mu_b.eta + mu_b.deltaEtaSC
         for i in (1, 2):
             pick = lead if i == 1 else ~lead
-            info[f"mva{i}"] = ak.fill_none(ak.where(pick, mu_a.mvaNoIso, mu_b.mvaNoIso), -99.0)
-            info[f"sceta{i}"] = ak.fill_none(ak.where(pick, sc_a, sc_b), -99.0)
+            for k, fill in (("mva", -99.0), ("sceta", -99.0), ("src", -1)):
+                info[f"{k}{i}"] = ak.fill_none(ak.where(pick, mu_a[k], mu_b[k]), fill)
     return info, ak.fill_none(in_pair, False)
+
+
+def electron_pair_mask(events, legs, in_pair):
+    """The Electrons (mask on events.Electron) of the legs in `in_pair` (the pair mask of find_jpsi on the legs)."""
+    pr = ak.cartesian([ak.local_index(events.Electron.pt), legs.eidx[in_pair]], nested=True)
+    return ak.any(pr["0"] == pr["1"], axis=2)
 
 
 def _np(x, fill):
@@ -230,14 +273,15 @@ def _flat(arr):
 def jpsi_truth(events, info, coll="Muon"):
     """MC truth of the dimuon: 0 prompt J/psi, 1 J/psi from a b-hadron decay, 2 no common J/psi parent of the
     two muons (combinatorial or misidentified) or data (with TTJ_ONIUM=upsilon: an Upsilon(1S, 2S, 3S) parent;
-    bottomonium states above it do not count as b hadrons). coll="Electron" for an e e pair."""
+    bottomonium states above it do not count as b hadrons). coll = the legs of onium_electron_legs for an e e pair."""
     n = len(events)
     out = np.full(n, 2, dtype=np.int64)
-    if "GenPart" not in events.fields or "genPartIdx" not in events[coll].fields:
+    leps = events[coll] if isinstance(coll, str) else coll
+    if "GenPart" not in events.fields or "genPartIdx" not in leps.fields:
         return out
     pdg, goff, gcnt = _flat(events.GenPart.pdgId)
     mom, _, _ = _flat(events.GenPart.genPartIdxMother)
-    gidx, moff, mcnt = _flat(events[coll].genPartIdx)
+    gidx, moff, mcnt = _flat(leps.genPartIdx)
     valid = ak.to_numpy(info["valid"])
     i1, i2 = ak.to_numpy(info["i1"]), ak.to_numpy(info["i2"])
     nmu = max(len(gidx), 1)
