@@ -11,6 +11,11 @@ categories 1 and 2 below; the b-matched J/psi (category 0, mostly from b-hadron 
 TTJ_ONIUM=upsilon (environment, read at import) makes the same pass for Upsilon(1S, 2S, 3S) -> mu mu: the pair closest
 to the Upsilon(1S) mass in 7-14 GeV, with that mass in l_xy. The fields and histograms keep their jpsi_* names, so
 every builder and fit reads either pass; an Upsilon pass is told apart by its mass range.
+
+The onium -> e e pair (find_jpsi with coll="Electron", from the electrons of onium_electron_mask) takes the electrons of
+the eta -> mu mu e e analysis (Greenberg et al., eta2mu2eSkimmer), so that its electron scale factors (EGM wp90noiso ID
+and RecoBelow20 reconstruction) or their measurement carry over; its mass range (EE_RANGE) is wider below the peak for
+the bremsstrahlung tail.
 """
 
 import os
@@ -22,11 +27,11 @@ import numpy as np
 # window, high sideband, of equal widths), PDG ids for the MC truth, lifetime regions (l_xy [mm], see below)
 ONIA = {
     "jpsi": dict(mass=3.0969, lo=2.0, hi=4.5, nbins=100, mreg=((2.60, 2.90), (2.95, 3.25), (3.30, 3.60)), pdg=(443,),
-                 lxy=(0.06, 0.10)),
+                 lxy=(0.06, 0.10), ee=(1.5, 4.5)),
     # the window holds the three states (9.46, 10.02, 10.36 GeV, resolution 0.07-0.15 GeV); the l_xy regions scale
     # with the mass (l_xy = m L_xy / p_T at the same resolution on L_xy)
     "upsilon": dict(mass=9.4603, lo=7.0, hi=14.0, nbins=140, mreg=((7.50, 9.00), (9.15, 10.65), (10.80, 12.30)),
-                    pdg=(553, 100553, 200553), lxy=(0.18, 0.30)),
+                    pdg=(553, 100553, 200553), lxy=(0.18, 0.30), ee=(6.0, 14.0)),
 }
 ONIUM = os.environ.get("TTJ_ONIUM", "jpsi")
 if ONIUM not in ONIA:
@@ -36,6 +41,7 @@ MASS_LO, MASS_HI, MASS_NBINS = ONIA[ONIUM]["lo"], ONIA[ONIUM]["hi"], ONIA[ONIUM]
 # mass regions: 0 low sideband, 1 signal window, 2 high sideband, 3 elsewhere in MASS_LO-MASS_HI
 MREG = ONIA[ONIUM]["mreg"]
 PDG_ONIUM = ONIA[ONIUM]["pdg"]
+EE_RANGE = ONIA[ONIUM]["ee"]  # pair mass range of the onium -> e e pair [GeV]
 DZ_MAX = 0.5  # |dz(mu1) - dz(mu2)| [cm]: both muons from one vertex (no dimuon vertex fit in NanoAOD)
 DR_JET = 0.4  # the J/psi is "in" a jet within this Delta R of the jet axis
 # lifetime regions (dimuon_vertex): on inclusive 2024 J/psi the prompt peak of l_xy has a core of about 20 um, so
@@ -49,11 +55,16 @@ Z0_PV = 0.1  # cm
 # version leaves its bit 0. mediumPromptId = medium + |dxy| < 0.02 cm + |dz| < 0.1 cm, as the pair-level PV category.
 MUON_ID_BITS = ("looseId", "mediumId", "mediumPromptId", "tightId", "softId", "isGlobal", "isTracker", "highPurity")
 MUON_FIELDS = ("iso04_1", "iso04_2", "phi1", "phi2", "dxy1", "dxy2", "dz1", "dz2", "idbits1", "idbits2")  # leading, subleading muon
+# the same for the electrons of an e e pair (idbits*: ELE_ID_BITS; "nmed" counts mvaNoIso_WP80), plus the MVA no-isolation
+# score and the supercluster eta (eta + deltaEtaSC, the variable of the EGM scale factors) of each electron
+ELE_ID_BITS = ("mvaNoIso_WP90", "mvaNoIso_WP80", "mvaIso_WP90", "mvaIso_WP80", "convVeto", "isPFcand", "isEcalDriven", "isEB")
+ELE_FIELDS = ("mva1", "mva2", "sceta1", "sceta2")
+EE_ETA_GAP = (1.44, 1.57)  # the barrel-endcap transition removed by the eta -> mu mu e e analysis (on eta)
 
 
-def muon_id_bits(mu):
+def muon_id_bits(mu, names=MUON_ID_BITS):
     bits = 0
-    for i, f in enumerate(MUON_ID_BITS):
+    for i, f in enumerate(names):
         if f in mu.fields:
             bits = bits + ak.values_astype(mu[f], np.int64) * (1 << i)
     return bits
@@ -65,17 +76,32 @@ def jpsi_muon_mask(events, exclude):
     return mu.looseId & (mu.pt > 3) & (abs(mu.eta) < 2.4) & ~exclude
 
 
-def find_jpsi(events, cand):
-    """Best dimuon per event from the muons in mask `cand` (on events.Muon).
-    Returns a dict of per-event arrays (invalid events carry dummy values) and the mask of its two muons on events.Muon."""
-    mu = events.Muon
+def onium_electron_mask(events, exclude):
+    """The electrons of the eta -> mu mu e e analysis (eta2mu2eSkimmer + plot_2mu2e.py, nominal): MVA no-isolation WP90
+    (Run 3 NanoAOD: Winter22 V1, the ID of the EGM wp90noiso scale factors), conversion veto (passConversionVeto, the
+    analysis's hasMatchedConversion with the beam spot), no missing inner hit, |eta| < 2.5 outside 1.44-1.57; no isolation.
+    pT > 5 GeV is the NanoAOD Electron threshold (the analysis, on MINIAOD, went down to 2 GeV). `exclude` masks the W / Z
+    electrons on events.Electron."""
+    el = events.Electron
+    aeta = abs(el.eta)
+    gap = (aeta > EE_ETA_GAP[0]) & (aeta < EE_ETA_GAP[1])
+    return el.mvaNoIso_WP90 & el.convVeto & (el.lostHits == 0) & (el.pt > 5) & (aeta < 2.5) & ~gap & ~exclude
+
+
+def find_jpsi(events, cand, coll="Muon", mass_range=None):
+    """Best dimuon per event from the muons in mask `cand` (on events.Muon); with coll="Electron" the best e e pair from
+    the electrons in `cand` (on events.Electron) in `mass_range` (default: the onium's mu mu range).
+    Returns a dict of per-event arrays (invalid events carry dummy values) and the mask of its two leptons on events[coll]."""
+    mu = events[coll]
+    ele = coll == "Electron"
+    lo, hi = mass_range if mass_range is not None else (MASS_LO, MASS_HI)
     lidx = ak.local_index(mu.pt)
     pairs = ak.combinations(lidx[cand], 2, fields=["i1", "i2"])
     m1, m2 = mu[pairs.i1], mu[pairs.i2]
     p4 = m1 + m2
     mass = p4.mass
     os_ = (m1.charge * m2.charge) < 0
-    ok = (mass > MASS_LO) & (mass < MASS_HI) & (abs(m1.dz - m2.dz) < DZ_MAX)
+    ok = (mass > lo) & (mass < hi) & (abs(m1.dz - m2.dz) < DZ_MAX)
     # opposite sign first, then the distance to the J/psi mass
     score = ak.where(ok, abs(mass - MJPSI) + ak.where(os_, 0.0, 100.0), 1e9)
     best = ak.argmin(score, axis=1, keepdims=True)
@@ -88,9 +114,11 @@ def find_jpsi(events, cand):
     energy, pz = jp.energy, jp.z
     rap = 0.5 * np.log((energy + pz) / np.maximum(energy - pz, 1e-9))
     sip = np.maximum(ak.firsts(m1.sip3d[best]), ak.firsts(m2.sip3d[best]))
-    nmed = ak.values_astype(m1.mediumId, np.int64) + ak.values_astype(m2.mediumId, np.int64)
+    good = "mvaNoIso_WP80" if ele else "mediumId"
+    nmed = ak.values_astype(m1[good], np.int64) + ak.values_astype(m2[good], np.int64)
     lead = ak.firsts(m1[best]).pt >= ak.firsts(m2[best]).pt
     mu_a, mu_b = ak.firsts(m1[best]), ak.firsts(m2[best])
+    bits = ELE_ID_BITS if ele else MUON_ID_BITS
     vtx = dimuon_vertex(ak.firsts(m1[best]), ak.firsts(m2[best]), jp, ak.to_numpy(valid))
     info = {
         "valid": valid,
@@ -113,11 +141,18 @@ def find_jpsi(events, cand):
         # PF isolation in 0.4 (the muon POG working points, tight < 0.15), direction and impact parameters (cm) of the two muons
         **{f"{k}{i}": ak.fill_none(ak.where(lead if i == 1 else ~lead, mu_a[f], mu_b[f]), -1.0 if k == "iso04_" else -99.0)
            for i in (1, 2) for k, f in (("iso04_", "pfRelIso04_all"), ("phi", "phi"), ("dxy", "dxy"), ("dz", "dz"))},
-        **{f"idbits{i}": ak.fill_none(ak.where(lead if i == 1 else ~lead, muon_id_bits(mu_a), muon_id_bits(mu_b)), 0) for i in (1, 2)},
+        **{f"idbits{i}": ak.fill_none(ak.where(lead if i == 1 else ~lead, muon_id_bits(mu_a, bits), muon_id_bits(mu_b, bits)), 0)
+           for i in (1, 2)},
         "i1": i1,
         "i2": i2,
         **vtx,
     }
+    if ele:
+        sc_a, sc_b = mu_a.eta + mu_a.deltaEtaSC, mu_b.eta + mu_b.deltaEtaSC
+        for i in (1, 2):
+            pick = lead if i == 1 else ~lead
+            info[f"mva{i}"] = ak.fill_none(ak.where(pick, mu_a.mvaNoIso, mu_b.mvaNoIso), -99.0)
+            info[f"sceta{i}"] = ak.fill_none(ak.where(pick, sc_a, sc_b), -99.0)
     return info, ak.fill_none(in_pair, False)
 
 
@@ -192,17 +227,17 @@ def _flat(arr):
     return ak.to_numpy(ak.flatten(arr)), offsets, counts
 
 
-def jpsi_truth(events, info):
+def jpsi_truth(events, info, coll="Muon"):
     """MC truth of the dimuon: 0 prompt J/psi, 1 J/psi from a b-hadron decay, 2 no common J/psi parent of the
     two muons (combinatorial or misidentified) or data (with TTJ_ONIUM=upsilon: an Upsilon(1S, 2S, 3S) parent;
-    bottomonium states above it do not count as b hadrons)."""
+    bottomonium states above it do not count as b hadrons). coll="Electron" for an e e pair."""
     n = len(events)
     out = np.full(n, 2, dtype=np.int64)
-    if "GenPart" not in events.fields or "genPartIdx" not in events.Muon.fields:
+    if "GenPart" not in events.fields or "genPartIdx" not in events[coll].fields:
         return out
     pdg, goff, gcnt = _flat(events.GenPart.pdgId)
     mom, _, _ = _flat(events.GenPart.genPartIdxMother)
-    gidx, moff, mcnt = _flat(events.Muon.genPartIdx)
+    gidx, moff, mcnt = _flat(events[coll].genPartIdx)
     valid = ak.to_numpy(info["valid"])
     i1, i2 = ak.to_numpy(info["i1"]), ak.to_numpy(info["i2"])
     nmu = max(len(gidx), 1)

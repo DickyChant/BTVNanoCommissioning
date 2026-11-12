@@ -13,14 +13,20 @@ electron: MVA-isolation WP80 outside the barrel-endcap gap, pT above the electro
 PUPPI MET), the MET filters. No jet multiplicity, and the jet veto map does not veto the event (stored as a flag).
 Z: the opposite-sign pair of the trigger flavour closest to the Z mass in 60-120 GeV, both leptons of the ttbar
 definition above 15 GeV and the leading one above the trigger threshold; no MET requirement.
-The onium pair is built from the loose-ID muons that are not the W / Z leptons (utils/jpsi.py, no isolation). Other
-leptons of the ttbar definitions above 15 GeV (either flavour, the muons of the onium pair apart) are counted, not cut
-on ("nextra"): a W with nextra = 0 is not in a Z channel, and no event is in both W channels.
+The onium -> mu mu pair is built from the loose-ID muons that are not the W / Z leptons (utils/jpsi.py, no isolation);
+the onium -> e e pair, independently, from the electrons of the eta -> mu mu e e analysis that are not the W / Z leptons
+(utils/jpsi.onium_electron_mask: MVA no-isolation WP90, conversion veto, no missing inner hit, |eta| < 2.5 outside
+1.44-1.57, pT > 5 GeV), so that its electron scale factors carry over. Other leptons of the ttbar definitions above 15 GeV
+(either flavour, the leptons of the pair of the table apart) are counted, not cut on ("nextra"): a W with nextra = 0 is
+not in a Z channel, and no event is in both W channels.
 
-Output per dataset: {channel: {"cands": one row per selected W / Z event with an onium pair (opposite or same sign, in
-the onium mass range), "nV": all selected W / Z events in (good primary vertices, m_T of the W or m_ll of the Z, jet veto
-flag, nextra 0 / >= 1), for the W / Z yield and the pileup (the rate of pileup onia)}, "sumw", and the processed luminosity
-blocks of the data}. No other histograms, no scale factors. Data runs the channels of its primary dataset; MC runs all four.
+Output per dataset: {channel: {"cands": one row per selected W / Z event with an onium -> mu mu pair (opposite or same
+sign, in the onium mass range), "cands_ee": the same for the onium -> e e pair (utils/jpsi.EE_RANGE, with the electron
+fields utils/jpsi.ELE_FIELDS), "nV": all selected W / Z events in (good primary vertices, m_T of the W or m_ll of the Z,
+jet veto flag, nextra 0 / >= 1), for the W / Z yield and the pileup (the rate of pileup onia)}, "sumw", and the processed
+luminosity blocks of the data}. Both tables carry the PUPPI MET (corrected and raw) and the track MET (TrkMET, charged
+PF candidates of the primary vertex: blind to the pileup onia). No other histograms, no scale factors. Data runs the
+channels of its primary dataset; MC runs all four.
 """
 import re
 
@@ -134,11 +140,16 @@ class NanoProcessor(processor.ProcessorABC):
         tmu, tel = tmu[sel], tel[sel]
         vlep = (lidx == i1) | (lidx == i2)  # on L of the selected events
         vmu = ak.zeros_like(tmu) if elec else vlep
+        vel = vlep if elec else ak.zeros_like(tel)
 
-        # the onium pair from the loose muons that are not W / Z leptons; the other leptons outside it are counted
+        # the onium pairs, mu mu from the loose muons and e e from the eta -> mu mu e e electrons that are not W / Z leptons;
+        # the other leptons outside the pair are counted (per table: the leptons of its own pair apart)
         info, pair = ONI.find_jpsi(e, ONI.jpsi_muon_mask(e, vmu))
         info["truth"] = ONI.jpsi_truth(e, info)
-        nextra = _np(ak.sum(tmu & ~vmu & ~pair, axis=1) + ak.sum(tel & ~(vlep if elec else ak.zeros_like(tel)), axis=1), 0)
+        nextra = _np(ak.sum(tmu & ~vmu & ~pair, axis=1) + ak.sum(tel & ~vel, axis=1), 0)
+        info_ee, pair_ee = ONI.find_jpsi(e, ONI.onium_electron_mask(e, vel), coll="Electron", mass_range=ONI.EE_RANGE)
+        info_ee["truth"] = ONI.jpsi_truth(e, info_ee, coll="Electron")
+        nextra_ee = _np(ak.sum(tmu & ~vmu, axis=1) + ak.sum(tel & ~vel & ~pair_ee, axis=1), 0)
         Lsel = e.Electron if elec else e.Muon
         l1 = ak.firsts(Lsel[ak.local_index(Lsel.pt) == i1])
         l2 = ak.firsts(Lsel[ak.local_index(Lsel.pt) == i2])
@@ -164,14 +175,8 @@ class NanoProcessor(processor.ProcessorABC):
         )
         nV.fill(npv=npv, mv=_np(v["mv"], -1.0), jv=jv, nx=np.minimum(nextra, 1), weight=w)
 
-        ok = _np(info["valid"], False).astype(bool)
-        cols = {"run": e.run, "lumi": e.luminosityBlock, "event": e.event, "npv": npv, "weight": w, "jetvetoed": jv, "nextra": nextra}
-        cols.update({k: info[k] for k in ONIUM_FIELDS})
-        cols["mreg"] = ONI.mass_region(info["mass"])
-        cols["life"] = ONI.life_region(info)
-        jp = info["p4"]
-        cols["eta"], cols["phi"] = ak.fill_none(jp.eta, -99.0), ak.fill_none(jp.phi, -99.0)
-        cols.update(ONI.near_objects(e, jp))
+        # the event columns, common to both tables
+        cols = {"run": e.run, "lumi": e.luminosityBlock, "event": e.event, "npv": npv, "weight": w, "jetvetoed": jv}
         # the W / Z leptons (l2_*: -99 for the W) and the W / Z system
         for k, lep in (("l1", l1), ("l2", l2)):
             for f, src in zip(NV_FIELDS, ("pt", "eta", "phi", "charge", "pfRelIso03_all" if elec else "pfRelIso04_all", "dz")):
@@ -180,6 +185,8 @@ class NanoProcessor(processor.ProcessorABC):
         cols["met"], cols["met_phi"] = met.pt, met.phi
         if "PuppiMET" in e.fields:
             cols["puppimet"], cols["puppimet_phi"] = e.PuppiMET.pt, e.PuppiMET.phi
+        if "TrkMET" in e.fields:
+            cols["trkmet"], cols["trkmet_phi"] = e.TrkMET.pt, e.TrkMET.phi
         # jets away from the W / Z leptons (the onium muons stay in their jets), with the UParT medium b tag: to set ttbar apart
         Lv = Lsel[vlep]
         jets = e.Jet[ak.fill_none(jet_id(e, self._campaign) & ak.all(e.Jet.metric_table(Lv) > 0.4, axis=2, mask_identity=False), False)]
@@ -191,10 +198,25 @@ class NanoProcessor(processor.ProcessorABC):
         cols["njets"] = ak.num(jets.pt, axis=1)
         cols["nb"] = ak.sum(ak.fill_none(isb, False), axis=1)
         cols["j1_pt"] = ak.fill_none(ak.firsts(jets.pt), -1.0)
+        cols = {k: c if isinstance(c, np.ndarray) else _np(c) for k, c in cols.items()}
         return {
-            "cands": {k: column_accumulator(np.asarray(_np(c) if not isinstance(c, np.ndarray) else c)[ok]) for k, c in cols.items()},
+            "cands": self.table(e, info, nextra, cols, ONIUM_FIELDS),
+            "cands_ee": self.table(e, info_ee, nextra_ee, cols, ONIUM_FIELDS + ONI.ELE_FIELDS),
             "nV": nV,
         }
+
+    @staticmethod
+    def table(e, info, nextra, cols, fields):
+        """{column: column_accumulator} of the events with a valid pair: the event columns `cols` and the pair's"""
+        ok = _np(info["valid"], False).astype(bool)
+        pc = {"nextra": nextra, **{k: info[k] for k in fields}}
+        pc["mreg"] = ONI.mass_region(info["mass"])
+        pc["life"] = ONI.life_region(info)
+        jp = info["p4"]
+        pc["eta"], pc["phi"] = ak.fill_none(jp.eta, -99.0), ak.fill_none(jp.phi, -99.0)
+        pc.update(ONI.near_objects(e, jp))
+        pc = {k: c if isinstance(c, np.ndarray) else _np(c) for k, c in pc.items()}
+        return {k: column_accumulator(np.asarray(c)[ok]) for k, c in {**cols, **pc}.items()}
 
     def postprocess(self, accumulator):
         return accumulator
