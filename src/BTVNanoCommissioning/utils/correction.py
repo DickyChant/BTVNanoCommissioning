@@ -509,7 +509,12 @@ def load_lumi(campaign):
     FileNotFoundError: If the luminosity mask file does not exist.
     """
 
-    _lumi_path = f"/cvmfs/cms-griddata.cern.ch/cat/metadata/DC/Collisions{campaign[-2:]}/latest/{config[campaign]['default']['DC']}"
+    # the year from the file name: the campaign suffix is not one for Summer22EE, Summer23BPix, the "v15" re-NANO campaigns
+    # (which would silently fall back to the packaged copies below, older than the cvmfs ones)
+    _dc = config[campaign]["default"]["DC"]
+    _yy = re.search(r"Collisions(?:20)?(\d\d)", _dc)
+    _yy = _yy.group(1) if _yy else campaign[-2:]
+    _lumi_path = f"/cvmfs/cms-griddata.cern.ch/cat/metadata/DC/Collisions{_yy}/latest/{_dc}"
     if os.path.exists(_lumi_path):
         return LumiMask(_lumi_path)
     else:
